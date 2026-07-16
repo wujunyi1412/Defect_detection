@@ -27,6 +27,7 @@ public:
     float area_threshold_ = 1.4f;
     float mask_area_threshold_ = 0.01f;
     float dark_clusters_threshold_ = 0.8f;
+    bool draw_box_details_ = true;
 
     AbnormalFilter abnormal_filter_;
     CategoryFilter stain_filter_;
@@ -67,6 +68,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->area_threshold_ = config.patchcore_area_threshold;
     pImpl->mask_area_threshold_ = config.patchcore_mask_area_threshold;
     pImpl->dark_clusters_threshold_ = config.dark_clusters_threshold;
+    pImpl->draw_box_details_ = config.draw_box_details;
 
     pImpl->abnormal_filter_ = config.abnormal_filter;
     pImpl->stain_filter_ = config.stain_filter;
@@ -199,6 +201,10 @@ void InspectionEngine::SetYoloNmsMode(bool class_aware) {
         class_aware ? YOLO::YOLOv8Segmentor::NmsMode::ClassAware
                     : YOLO::YOLOv8Segmentor::NmsMode::Global
     );
+}
+
+bool InspectionEngine::ShouldDrawBoxDetails() const {
+    return pImpl->draw_box_details_;
 }
 
 void InspectionEngine::Release() {

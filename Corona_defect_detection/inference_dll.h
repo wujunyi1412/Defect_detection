@@ -47,6 +47,8 @@ public:
     DLL_EXPORT void SetDarkClustersThreshold(float dark_clusters_thresh);
 
     DLL_EXPORT void SetYoloNmsMode(bool class_aware);
+
+    DLL_EXPORT bool ShouldDrawBoxDetails() const;
     
     DLL_EXPORT void Release();
 

@@ -214,6 +214,7 @@ static bool SaveResultOverlay(
     int32_t width,
     int32_t height,
     const InspectionDLL::InferenceResult& result,
+    bool draw_box_details,
     int32_t o_imageHandle[1],
     char o_message[100]
 ) {
@@ -285,33 +286,35 @@ static bool SaveResultOverlay(
 
             cv::rectangle(vis, r, color, 2);
 
-            std::string name = d.name;
-            if (name.empty()) name = "defect";
+            if (draw_box_details) {
+                std::string name = d.name;
+                if (name.empty()) name = "defect";
 
-            std::vector<std::string> lines;
-            lines.reserve(3);
-            {
-                std::ostringstream oss;
-                oss << name << " ";
-                if (name == "Abnormal") {
-                    oss << "Score:" << std::fixed << std::setprecision(3) << d.score;
-                } else {
-                    oss << "Conf:" << std::fixed << std::setprecision(3) << d.score;
+                std::vector<std::string> lines;
+                lines.reserve(3);
+                {
+                    std::ostringstream oss;
+                    oss << name << " ";
+                    if (name == "Abnormal") {
+                        oss << "Score:" << std::fixed << std::setprecision(3) << d.score;
+                    } else {
+                        oss << "Conf:" << std::fixed << std::setprecision(3) << d.score;
+                    }
+                    lines.push_back(oss.str());
                 }
-                lines.push_back(oss.str());
-            }
-            {
-                std::ostringstream oss;
-                oss << "Contrast:" << std::fixed << std::setprecision(2) << d.contrast << " Area:" << d.area;
-                lines.push_back(oss.str());
-            }
-            {
-                std::ostringstream oss;
-                oss << "W:" << w << " H:" << h;
-                lines.push_back(oss.str());
-            }
+                {
+                    std::ostringstream oss;
+                    oss << "Contrast:" << std::fixed << std::setprecision(2) << d.contrast << " Area:" << d.area;
+                    lines.push_back(oss.str());
+                }
+                {
+                    std::ostringstream oss;
+                    oss << "W:" << w << " H:" << h;
+                    lines.push_back(oss.str());
+                }
 
-            DrawLabelBlock(vis, r, lines, color, width, height);
+                DrawLabelBlock(vis, r, lines, color, width, height);
+            }
         }
         
         if (o_imageHandle) {
@@ -497,7 +500,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
     }
     FillResult(tmp, out_result);
 
-    SaveResultOverlay(image_array, width, height, tmp, o_imageHandle, o_message);
+    SaveResultOverlay(image_array, width, height, tmp, eng->ShouldDrawBoxDetails(), o_imageHandle, o_message);
     CopyExceptionMessage("inference success", o_message);
     
     return 0;
@@ -583,7 +586,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray_npy(
         }
     }
 
-    SaveResultOverlay(i_image_array, i_width, i_height, tmp, o_imageHandle, o_message);
+    SaveResultOverlay(i_image_array, i_width, i_height, tmp, eng->ShouldDrawBoxDetails(), o_imageHandle, o_message);
     CopyExceptionMessage("inference success", o_message);
     
     return 0;
