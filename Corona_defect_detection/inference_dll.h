@@ -49,6 +49,8 @@ public:
     DLL_EXPORT void SetYoloNmsMode(bool class_aware);
 
     DLL_EXPORT bool ShouldDrawBoxDetails() const;
+
+    DLL_EXPORT const std::string& GetLastError() const;
     
     DLL_EXPORT void Release();
 

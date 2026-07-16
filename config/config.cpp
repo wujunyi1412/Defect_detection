@@ -2,11 +2,14 @@
 
 #include "ini_parser.h"
 
+#include <filesystem>
 #include <sstream>
 #include <vector>
 
 namespace InspectionConfig {
 namespace {
+
+namespace fs = std::filesystem;
 
 CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& section) {
     CategoryFilterConfig filter;
@@ -34,6 +37,69 @@ AbnormalFilterConfig LoadAbnormalFilter(const IniData& ini) {
     filter.min_height = GetIntOr(ini, section, "min_height", 0);
     filter.min_area = GetIntOr(ini, section, "min_area", 0);
     return filter;
+}
+
+bool IsSupportedLogLevel(const std::string& level) {
+    return level == "error" || level == "warn" || level == "warning" || level == "info" || level == "debug";
+}
+
+bool ValidateNonNegative(float value, const char* name, std::string& err) {
+    if (value < 0.0f) {
+        err = std::string(name) + " must be >= 0";
+        return false;
+    }
+    return true;
+}
+
+bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
+    if (!fs::exists(out.yolo_model_path)) {
+        err = "yolo_model_path does not exist: " + out.yolo_model_path;
+        return false;
+    }
+    if (!fs::exists(out.patchcore_model_path)) {
+        err = "patchcore_model_path does not exist: " + out.patchcore_model_path;
+        return false;
+    }
+    if (!fs::exists(out.faiss_index_path)) {
+        err = "faiss_index_path does not exist: " + out.faiss_index_path;
+        return false;
+    }
+    if (!fs::exists(out.metadata_path)) {
+        err = "metadata_path does not exist: " + out.metadata_path;
+        return false;
+    }
+    if (out.ort_intra_threads <= 0) {
+        err = "ort.intra_threads must be > 0";
+        return false;
+    }
+    if (out.yolo_iou_threshold < 0.0f || out.yolo_iou_threshold > 1.0f) {
+        err = "yolo.iou_threshold must be in [0, 1]";
+        return false;
+    }
+    if (!ValidateNonNegative(out.yolo_score_threshold, "yolo.score_threshold", err)) return false;
+    if (!ValidateNonNegative(out.patchcore_score_threshold, "patchcore.score_threshold", err)) return false;
+    if (!ValidateNonNegative(out.patchcore_area_threshold, "patchcore.area_threshold", err)) return false;
+    if (!ValidateNonNegative(out.patchcore_mask_area_threshold, "patchcore.mask_area_threshold", err)) return false;
+    if (!ValidateNonNegative(out.dark_clusters_threshold, "post.dark_clusters_threshold", err)) return false;
+
+    if (!IsSupportedLogLevel(out.log_level)) {
+        err = "log.level must be one of: error, warn, info, debug";
+        return false;
+    }
+
+    if (out.log_to_file) {
+        if (out.log_file_path.empty()) {
+            err = "log.file_path must be set when log_to_file=1";
+            return false;
+        }
+        const fs::path parent = fs::path(out.log_file_path).parent_path();
+        if (!parent.empty() && !fs::exists(parent)) {
+            err = "log file parent directory does not exist: " + parent.string();
+            return false;
+        }
+    }
+
+    return true;
 }
 
 }  // namespace
@@ -76,12 +142,24 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.patchcore_mask_area_threshold = GetFloatOr(ini, "patchcore", "mask_area_threshold", out.patchcore_mask_area_threshold);
     out.dark_clusters_threshold = GetFloatOr(ini, "post", "dark_clusters_threshold", out.dark_clusters_threshold);
     out.draw_box_details = GetBoolOr(ini, "post", "draw_box_details", out.draw_box_details);
+    out.log_enabled = GetBoolOr(ini, "log", "enabled", out.log_enabled);
+    out.log_level = GetStringOr(ini, "log", "level", out.log_level);
+    out.log_to_stderr = GetBoolOr(ini, "log", "log_to_stderr", out.log_to_stderr);
+    out.log_to_file = GetBoolOr(ini, "log", "log_to_file", out.log_to_file);
+    out.log_file_path = GetStringOr(ini, "log", "file_path", out.log_file_path);
+    if (!out.log_file_path.empty()) {
+        out.log_file_path = ResolvePathRelativeToIni(config_path, out.log_file_path);
+    }
 
     out.abnormal_filter = LoadAbnormalFilter(ini);
     out.stain_filter = LoadCategoryFilter(ini, "stain_config");
     out.darkclusters_filter = LoadCategoryFilter(ini, "darkclusters_config");
     out.brightstripes_filter = LoadCategoryFilter(ini, "brightstripes_config");
     out.lineartifacts_filter = LoadCategoryFilter(ini, "lineartifacts_config");
+
+    if (!ValidateConfig(out, err)) {
+        return false;
+    }
 
     return true;
 }

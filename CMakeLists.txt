@@ -71,8 +71,10 @@ set(OPENBLAS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/install_openblas")
 set(DLL_SOURCES
     config/config.cpp
     config/ini_parser.cpp
+    logging/logger.cpp
     Corona_defect_detection/inference_c_api.cpp
     Corona_defect_detection/inference_dll.cpp                    
+    Corona_defect_detection/internal/overlay_renderer.cpp
     Corona_defect_detection/internal/image_utils.cpp
     Corona_defect_detection/internal/dark_defect_refiner.cpp
     Corona_defect_detection/internal/patchcore_postprocess.cpp
@@ -86,8 +88,10 @@ set(DLL_SOURCES
 set(DLL_HEADERS
     config/config.h
     config/ini_parser.h
+    logging/logger.h
     Corona_defect_detection/inference_dll.h
     Corona_defect_detection/inference_c_api.h
+    Corona_defect_detection/internal/overlay_renderer.h
     Corona_defect_detection/internal/image_utils.h
     Corona_defect_detection/internal/dark_defect_refiner.h
     Corona_defect_detection/internal/patchcore_postprocess.h
@@ -104,6 +108,7 @@ target_compile_definitions(Corona_defect_detection PRIVATE INSPECTION_CAPI_EXPOR
 
 target_include_directories(Corona_defect_detection PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/config
+    ${CMAKE_CURRENT_SOURCE_DIR}/logging
     ${CMAKE_CURRENT_SOURCE_DIR}/Corona_defect_detection 
     ${CMAKE_CURRENT_SOURCE_DIR}/Corona_defect_detection/internal
     ${CMAKE_CURRENT_SOURCE_DIR}/image_process         
@@ -203,6 +208,34 @@ if(WIN32)
         )
     endforeach()
 
+endif()
+
+option(BUILD_SMOKE_TESTS "Build lightweight smoke tests" ON)
+
+if(BUILD_SMOKE_TESTS)
+    add_executable(corona_smoke_tests
+        tests/smoke_tests.cpp
+        config/config.cpp
+        config/ini_parser.cpp
+        logging/logger.cpp
+        Corona_defect_detection/internal/overlay_renderer.cpp
+    )
+
+    target_include_directories(corona_smoke_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/config
+        ${CMAKE_CURRENT_SOURCE_DIR}/logging
+        ${CMAKE_CURRENT_SOURCE_DIR}/Corona_defect_detection
+        ${OPENCV_INCLUDE_DIR}
+        ${HALCON_INCLUDE_DIR}
+        ${HALCONCPP_INCLUDE_DIR}
+    )
+
+    target_link_libraries(corona_smoke_tests PRIVATE ${OPENCV_LIBS})
+    target_link_libraries(corona_smoke_tests PRIVATE "${HALCON_LIB_DIR}/halconcpp.lib" "${HALCON_LIB_DIR}/halcon.lib")
+
+    set_target_properties(corona_smoke_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
 endif()
 
 

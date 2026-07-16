@@ -1,11 +1,12 @@
 #include "inference_dll.h"
 
-#include <iostream>
+#include <exception>
 #include <memory>
 
 #include <opencv2/opencv.hpp>
 
 #include "config.h"
+#include "logger.h"
 #include "patchcore_inference.h"
 #include "yolo_inference.h"
 #include "internal/image_utils.h"
@@ -28,6 +29,7 @@ public:
     float mask_area_threshold_ = 0.01f;
     float dark_clusters_threshold_ = 0.8f;
     bool draw_box_details_ = true;
+    std::string last_error_;
 
     AbnormalFilter abnormal_filter_;
     CategoryFilter stain_filter_;
@@ -36,6 +38,15 @@ public:
     CategoryFilter lineartifacts_filter_;
 
     bool initialized_ = false;
+
+    void SetLastError(const std::string& message, InspectionLogging::LogLevel level = InspectionLogging::LogLevel::Error) {
+        last_error_ = message;
+        InspectionLogging::LogMessage(level, message);
+    }
+
+    void ClearLastError() {
+        last_error_.clear();
+    }
 
     Internal::ResultComposeContext BuildComposeContext() const {
         Internal::ResultComposeContext context;
@@ -57,12 +68,25 @@ InspectionEngine::~InspectionEngine() {
 }
 
 bool InspectionEngine::Initialize(const std::string& config_path) {
+    pImpl->ClearLastError();
     InspectionConfig::InspectionConfigData config;
     std::string err;
     if (!InspectionConfig::LoadInspectionConfig(config_path, config, err)) {
-        std::cerr << "[DLL] " << err << std::endl;
+        pImpl->SetLastError("config load failed: " + err);
         return false;
     }
+
+    InspectionLogging::LoggerConfig logger_config;
+    logger_config.enabled = config.log_enabled;
+    logger_config.log_to_stderr = config.log_to_stderr;
+    logger_config.log_to_file = config.log_to_file;
+    logger_config.file_path = config.log_file_path;
+    if (!InspectionLogging::TryParseLogLevel(config.log_level, logger_config.min_level)) {
+        pImpl->SetLastError("invalid log level after config parse: " + config.log_level);
+        return false;
+    }
+    InspectionLogging::SetLoggerConfig(logger_config);
+    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "initializing inspection engine with config: " + config_path);
 
     pImpl->score_threshold_ = config.patchcore_score_threshold;
     pImpl->area_threshold_ = config.patchcore_area_threshold;
@@ -81,40 +105,42 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     );
 
     if (!pImpl->yolo_detector.Initialize(config.yolo_model_path, config.yolo_score_threshold, config.yolo_iou_threshold, {640, 640}, config.ort_intra_threads)) {
-        std::cerr << "[DLL] Failed to initialize YOLO detector" << std::endl;
+        pImpl->SetLastError("failed to initialize YOLO detector");
         return false;
     }
 
     if (!pImpl->patchcore_detector.Initialize(config.patchcore_model_path, config.faiss_index_path, config.metadata_path, config.ort_intra_threads)) {
-        std::cerr << "[DLL] Failed to initialize PatchCore detector" << std::endl;
+        pImpl->SetLastError("failed to initialize PatchCore detector");
         return false;
     }
 
     pImpl->initialized_ = true;
+    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "inspection engine initialized successfully");
     return true;
 }
 
 bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult& output) {
+    pImpl->ClearLastError();
     if (!pImpl->initialized_) {
-        std::cerr << "[DLL] Engine not initialized" << std::endl;
+        pImpl->SetLastError("engine not initialized");
         return false;
     }
 
     if (input_image.empty()) {
-        std::cerr << "[DLL] Input image is empty" << std::endl;
+        pImpl->SetLastError("input image is empty");
         return false;
     }
 
     try {
         cv::Mat img_patchcore = Internal::ProcessTIF32ForPatchcore(input_image);
         if (img_patchcore.empty()) {
-            std::cerr << "[DLL] Image preprocessing failed(seg)" << std::endl;
+            pImpl->SetLastError("image preprocessing failed for patchcore");
             return false;
         }
 
         cv::Mat img_yolo = Internal::ProcessForYolo(input_image);
         if (img_yolo.empty()) {
-            std::cerr << "[DLL] Image preprocessing failed(cls)" << std::endl;
+            pImpl->SetLastError("image preprocessing failed for yolo");
             return false;
         }
 
@@ -127,7 +153,7 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
         const bool patchcore_success = pImpl->patchcore_detector.Infer(img_patchcore, patchcore_result);
 
         if (!yolo_success && !patchcore_success) {
-            std::cerr << "[DLL] Both models failed" << std::endl;
+            pImpl->SetLastError("both models failed");
             return false;
         }
 
@@ -156,17 +182,22 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
             gray_yolo,
             output,
             pImpl->BuildComposeContext());
+        InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, "image processed successfully");
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "[DLL] Processing error: " << e.what() << std::endl;
+        pImpl->SetLastError(std::string("processing error: ") + e.what());
+        return false;
+    } catch (...) {
+        pImpl->SetLastError("processing error: unknown exception");
         return false;
     }
 }
 
 bool InspectionEngine::ProcessImagePath(const std::string& image_path, InferenceResult& output) {
+    pImpl->ClearLastError();
     cv::Mat img = cv::imread(image_path, cv::IMREAD_UNCHANGED);
     if (img.empty()) {
-        std::cerr << "[DLL] Failed to read image: " << image_path << std::endl;
+        pImpl->SetLastError("failed to read image: " + image_path);
         return false;
     }
 
@@ -174,7 +205,9 @@ bool InspectionEngine::ProcessImagePath(const std::string& image_path, Inference
 }
 
 bool InspectionEngine::ProcessFloatArry(const float* image_arry, InferenceResult& output, int width, int height) {
+    pImpl->ClearLastError();
     if (image_arry == nullptr || width <= 0 || height <= 0) {
+        pImpl->SetLastError("float array input is invalid");
         return false;
     }
 
@@ -190,10 +223,12 @@ void InspectionEngine::SetThresholds(float score_thresh, float area_thresh, floa
     pImpl->score_threshold_ = score_thresh;
     pImpl->area_threshold_ = area_thresh;
     pImpl->mask_area_threshold_ = mask_area_thresh;
+    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime thresholds updated");
 }
 
 void InspectionEngine::SetDarkClustersThreshold(float dark_clusters_thresh) {
     pImpl->dark_clusters_threshold_ = dark_clusters_thresh;
+    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime dark_clusters_threshold updated");
 }
 
 void InspectionEngine::SetYoloNmsMode(bool class_aware) {
@@ -201,14 +236,21 @@ void InspectionEngine::SetYoloNmsMode(bool class_aware) {
         class_aware ? YOLO::YOLOv8Segmentor::NmsMode::ClassAware
                     : YOLO::YOLOv8Segmentor::NmsMode::Global
     );
+    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime yolo nms mode updated");
 }
 
 bool InspectionEngine::ShouldDrawBoxDetails() const {
     return pImpl->draw_box_details_;
 }
 
+const std::string& InspectionEngine::GetLastError() const {
+    return pImpl->last_error_;
+}
+
 void InspectionEngine::Release() {
     pImpl->initialized_ = false;
+    pImpl->ClearLastError();
+    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "inspection engine released");
 }
 
 }  // namespace InspectionDLL

@@ -39,6 +39,11 @@ struct InspectionConfigData {
     float patchcore_mask_area_threshold = 0.3f;
     float dark_clusters_threshold = 0.8f;
     bool draw_box_details = true;
+    bool log_enabled = true;
+    std::string log_level = "info";
+    bool log_to_stderr = true;
+    bool log_to_file = false;
+    std::string log_file_path;
     AbnormalFilterConfig abnormal_filter;
     CategoryFilterConfig stain_filter;
     CategoryFilterConfig darkclusters_filter;
