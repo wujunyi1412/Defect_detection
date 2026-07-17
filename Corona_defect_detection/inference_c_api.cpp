@@ -28,8 +28,10 @@
 #endif
 #endif
 
+// 内部辅助函数
 namespace {
 
+// 对比字符串是否相等，不区分大小写
 bool EqualsIgnoreCase(const char* a, const char* b) {
     if (!a || !b) return false;
     while (*a && *b) {
@@ -42,6 +44,7 @@ bool EqualsIgnoreCase(const char* a, const char* b) {
     return *a == '\0' && *b == '\0';
 }
 
+// 将缺陷名称转换为缺陷索引
 int32_t DefectNameToIndex(const char* name) {
     if (!name || name[0] == '\0') return -1;
     if (EqualsIgnoreCase(name, "Abnormal")) return static_cast<int32_t>(Defect_name::Abnormal);
@@ -52,33 +55,36 @@ int32_t DefectNameToIndex(const char* name) {
     return -1;
 }
 
+// 将异常信息复制到输出缓冲区
 void CopyExceptionMessage(const char* msg, char o_message[O_MESSAGE_LEN]) {
     if (!o_message) {
         return;
     }
 
     if (!msg) {
-        strcpy(o_message, "Unknown error");
+        snprintf(o_message, O_MESSAGE_LEN, "Unknown error");
         return;
     }
 
 #ifdef _MSC_VER
     strncpy_s(o_message, O_MESSAGE_LEN, msg, _TRUNCATE);
 #else
-    strncpy(o_message, msg, O_MESSAGE_LEN - 1);
-    o_message[O_MESSAGE_LEN - 1] = '\0';
+    snprintf(o_message, O_MESSAGE_LEN, "%s", msg);
 #endif
 }
 
+// 将句柄转换为引擎指针
 InspectionDLL::InspectionEngine* ToEngine(InspectionHandle handle) {
     return reinterpret_cast<InspectionDLL::InspectionEngine*>(handle);
 }
 
+// 将结果结构体置零
 void ZeroResult(InspectionResultC* out_result) {
     if (!out_result) return;
     std::memset(out_result, 0, sizeof(InspectionResultC));
 }
 
+// 将字符串复制到输出缓冲区，确保 null 终止
 void CopyName(char* dst, size_t dst_size, const std::string& src) {
     if (!dst || dst_size == 0) return;
 #ifdef _WIN32
@@ -89,6 +95,7 @@ void CopyName(char* dst, size_t dst_size, const std::string& src) {
 #endif
 }
 
+// 将推理结果填充到输出结构体
 void FillResult(const InspectionDLL::InferenceResult& src, InspectionResultC* dst) {
     if (!dst) return;
 
@@ -97,6 +104,7 @@ void FillResult(const InspectionDLL::InferenceResult& src, InspectionResultC* ds
     dst->patchcore_score = src.patchcore_score;
     dst->patchcore_area_ratio = src.patchcore_area_ratio;
 
+    // 填充details
     const int32_t n = static_cast<int32_t>(std::min<size_t>(src.details.size(), INSPECTION_MAX_DETECTIONS));
     dst->details_count = n;
     for (int32_t i = 0; i < n; ++i) {
@@ -113,6 +121,7 @@ void FillResult(const InspectionDLL::InferenceResult& src, InspectionResultC* ds
     }
 }
 
+// 将输入图像数组保存为 32 位浮点数 TIFF 图像
 bool SaveInputTiff32F(
     const float* image_array,
     int32_t array_length,
@@ -138,6 +147,7 @@ bool SaveInputTiff32F(
 
 }  // namespace
 
+// 创建 inspection 引擎实例
 INSPECTION_C_EXPORT InspectionHandle INSPECTION_CALL Inspection_Create() {
     try {
         return reinterpret_cast<InspectionHandle>(new InspectionDLL::InspectionEngine());
@@ -146,11 +156,13 @@ INSPECTION_C_EXPORT InspectionHandle INSPECTION_CALL Inspection_Create() {
     }
 }
 
+// 销毁 inspection 引擎实例
 INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_Destroy(InspectionHandle handle) {
     auto* eng = ToEngine(handle);
     delete eng;
 }
 
+// 初始化 inspection 引擎
 INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_Initialize(
     InspectionHandle handle,
     const char* i_config_path,
@@ -158,15 +170,16 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_Initialize(
 ) {
     auto* eng = ToEngine(handle);
     if (!eng) {
-        CopyExceptionMessage("invalid inspection handle", o_message);
+        CopyExceptionMessage("inspection handle is nullptr.", o_message);
         return INSPECTION_STATUS_INVALID_ARGUMENT;
     }
     if (!i_config_path) {
-        CopyExceptionMessage("config path is empty", o_message);
+        CopyExceptionMessage("config path is empty.", o_message);
         return INSPECTION_STATUS_INVALID_ARGUMENT;
     }
 
     if (!eng->Initialize(std::string(i_config_path))) {
+        // 初始化失败，复制错误信息
         CopyExceptionMessage(eng->GetLastError().c_str(), o_message);
         return INSPECTION_STATUS_INITIALIZE_FAILED;
     }
@@ -175,6 +188,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_Initialize(
     return INSPECTION_STATUS_OK;
 }
 
+// 处理单张图像路径
 INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePath(
     InspectionHandle handle,
     const char* image_path,
@@ -182,7 +196,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePath(
 ) {
     ZeroResult(out_result);
     auto* eng = ToEngine(handle);
-    if (!eng || !image_path || !out_result) return INSPECTION_STATUS_INVALID_ARGUMENT;
+    if (!eng || !image_path || !out_result)  return INSPECTION_STATUS_INVALID_ARGUMENT;
 
     InspectionDLL::InferenceResult tmp;
     if (!eng->ProcessImagePath(std::string(image_path), tmp)) {
@@ -193,6 +207,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePath(
     return INSPECTION_STATUS_OK;
 }
 
+// 处理单张图像数组
 INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
     InspectionHandle handle,
     const float* image_array,
@@ -206,7 +221,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
     ZeroResult(out_result);
     auto* eng = ToEngine(handle);
     if (!eng) {
-        CopyExceptionMessage("invalid inspection handle", o_message);
+        CopyExceptionMessage("invalid inspection handle.", o_message);
         return INSPECTION_STATUS_INVALID_ARGUMENT;
     }
     if (!image_array) {
@@ -224,7 +239,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
         return INSPECTION_STATUS_INVALID_ARGUMENT;
     }
     if (array_length != static_cast<int32_t>(expected)) {
-        CopyExceptionMessage("The size of numpy is not equal width plus height", o_message);
+        CopyExceptionMessage("array_length does not match width times height.", o_message);
         return INSPECTION_STATUS_INVALID_ARGUMENT;
     }
 
@@ -253,6 +268,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
     return INSPECTION_STATUS_OK;
 }
 
+// 处理单张图像数组（返回检测结果，结果格式满足sunny之前风格）
 INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray_npy(
     InspectionHandle handle,
     const float* i_image_array,
@@ -302,7 +318,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray_npy(
 
     int32_t counts[INSPECTION_DETECT_CATEGORIES] = {0};
     int32_t write_pos[INSPECTION_DETECT_CATEGORIES] = {0};
-
+    // 遍历检测结果，填充结果数组
     for (int32_t i = 0; i < result_c.details_count; ++i) {
         const auto& d = result_c.details[i];
         const int32_t cat = DefectNameToIndex(d.name);
@@ -321,12 +337,14 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray_npy(
         write_pos[cat] += 1;
     }
 
+    // 填充检测数量, 每个类别最多INSPECTION_MAX_DETECTIONS个检测结果
     if (o_detect_num) {
         for (int32_t c = 0; c < INSPECTION_DETECT_CATEGORIES; ++c) {
             o_detect_num[c] = std::min<int32_t>(counts[c], INSPECTION_MAX_DETECTIONS);
         }
     }
 
+    // 渲染推理结果到Halcon图像句柄
     std::string overlay_err;
     if (!InspectionOverlay::RenderResultOverlayToHalconHandle(
             i_image_array,
@@ -344,6 +362,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray_npy(
     return INSPECTION_STATUS_OK;
 }
 
+// 设置推理阈值
 INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetThresholds(
     InspectionHandle handle,
     float score_thresh,
@@ -355,6 +374,7 @@ INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetThresholds(
     eng->SetThresholds(score_thresh, area_thresh, mask_area_thresh);
 }
 
+// 设置暗区聚类阈值
 INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetDarkClustersThreshold(
     InspectionHandle handle,
     float dark_clusters_thresh
@@ -364,6 +384,7 @@ INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetDarkClustersThreshold(
     eng->SetDarkClustersThreshold(dark_clusters_thresh);
 }
 
+// 设置YOLO NMS模式（是否类别感知）
 INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetYoloNmsMode(
     InspectionHandle handle,
     int32_t class_aware
@@ -373,6 +394,7 @@ INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetYoloNmsMode(
     eng->SetYoloNmsMode(class_aware != 0);
 }
 
+// 释放 inspection 引擎资源
 INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_Release(InspectionHandle handle) {
     auto* eng = ToEngine(handle);
     if (!eng) return;

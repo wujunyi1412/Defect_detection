@@ -23,6 +23,7 @@
 namespace InspectionOverlay {
 namespace {
 
+// 辅助函数：将文本适配到指定宽度
 std::string FitTextToWidth(const std::string& text, int max_width, double font_scale, int thickness) {
     if (max_width <= 0) return std::string();
     int baseline = 0;
@@ -50,6 +51,7 @@ std::string FitTextToWidth(const std::string& text, int max_width, double font_s
     return text.substr(0, static_cast<size_t>(lo)) + ellipsis;
 }
 
+// 辅助函数：绘制标签块
 void DrawLabelBlock(
     cv::Mat& vis,
     const cv::Rect& r,
@@ -118,6 +120,7 @@ void DrawLabelBlock(
 
 }  // namespace
 
+// 渲染推理结果到Halcon图像句柄
 bool RenderResultOverlayToHalconHandle(
     const float* image_array,
     int32_t width,
@@ -279,6 +282,7 @@ bool RenderResultOverlayToHalconHandle(
     }
 }
 
+// 测试用辅助函数：将文本适配到指定宽度
 std::string FitTextToWidthForTest(const std::string& text, int max_width, double font_scale, int thickness) {
     return FitTextToWidth(text, max_width, font_scale, thickness);
 }

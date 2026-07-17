@@ -16,6 +16,7 @@
 
 namespace InspectionDLL {
 
+// InspectionEngine 实现类
 class InspectionEngine::Impl {
 public:
     using CategoryFilter = InspectionConfig::CategoryFilterConfig;
@@ -61,12 +62,15 @@ public:
     }
 };
 
+// InspectionEngine 构造函数
 InspectionEngine::InspectionEngine() : pImpl(std::make_unique<Impl>()) {}
 
+// InspectionEngine 析构函数
 InspectionEngine::~InspectionEngine() {
     Release();
 }
 
+// InspectionEngine 初始化函数
 bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->ClearLastError();
     InspectionConfig::InspectionConfigData config;
@@ -119,6 +123,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     return true;
 }
 
+// InspectionEngine 推理函数
 bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult& output) {
     pImpl->ClearLastError();
     if (!pImpl->initialized_) {
@@ -193,6 +198,7 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
     }
 }
 
+// InspectionEngine 推理函数（图像路径）
 bool InspectionEngine::ProcessImagePath(const std::string& image_path, InferenceResult& output) {
     pImpl->ClearLastError();
     cv::Mat img = cv::imread(image_path, cv::IMREAD_UNCHANGED);
@@ -204,10 +210,11 @@ bool InspectionEngine::ProcessImagePath(const std::string& image_path, Inference
     return ProcessImage(img, output);
 }
 
+// 处理单张图像数组
 bool InspectionEngine::ProcessFloatArry(const float* image_arry, InferenceResult& output, int width, int height) {
     pImpl->ClearLastError();
     if (image_arry == nullptr || width <= 0 || height <= 0) {
-        pImpl->SetLastError("float array input is invalid");
+        pImpl->SetLastError("invalid input array or dimensions");
         return false;
     }
 
@@ -219,6 +226,7 @@ bool InspectionEngine::ProcessFloatArry(const float* image_arry, InferenceResult
     return true;
 }
 
+// 设置运行时阈值
 void InspectionEngine::SetThresholds(float score_thresh, float area_thresh, float mask_area_thresh) {
     pImpl->score_threshold_ = score_thresh;
     pImpl->area_threshold_ = area_thresh;
@@ -226,11 +234,13 @@ void InspectionEngine::SetThresholds(float score_thresh, float area_thresh, floa
     InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime thresholds updated");
 }
 
+// 设置暗区聚类阈值
 void InspectionEngine::SetDarkClustersThreshold(float dark_clusters_thresh) {
     pImpl->dark_clusters_threshold_ = dark_clusters_thresh;
     InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime dark_clusters_threshold updated");
 }
 
+// 设置YOLO NMS模式（是否类别感知）
 void InspectionEngine::SetYoloNmsMode(bool class_aware) {
     pImpl->yolo_detector.SetNmsMode(
         class_aware ? YOLO::YOLOv8Segmentor::NmsMode::ClassAware
@@ -239,14 +249,17 @@ void InspectionEngine::SetYoloNmsMode(bool class_aware) {
     InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime yolo nms mode updated");
 }
 
+// 是否绘制框详情
 bool InspectionEngine::ShouldDrawBoxDetails() const {
     return pImpl->draw_box_details_;
 }
 
+// 获取最后一次错误信息
 const std::string& InspectionEngine::GetLastError() const {
     return pImpl->last_error_;
 }
 
+// 释放 inspection 引擎资源
 void InspectionEngine::Release() {
     pImpl->initialized_ = false;
     pImpl->ClearLastError();
