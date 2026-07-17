@@ -1,6 +1,6 @@
-# Corona Defect Detection
+# Defect Detection
 
-基于 ONNX Runtime 的工业视觉缺陷检测 DLL 库，用于电晕处理相关表面缺陷的自动检测与分类。
+基于 ONNX Runtime 的工业视觉缺陷检测 DLL 库，用于表面缺陷的自动检测与分类。
 
 ## 架构概览
 
