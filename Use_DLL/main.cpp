@@ -402,7 +402,7 @@ std::string RequireValue(int argc, char** argv, int& index, const std::string& o
 
 int main(int argc, char** argv) {
     try {
-        std::string config_path = "config.ini";
+        std::string config_path = "E:/onnx_infer_code/cpp_version_C#/Use_DLL/config.ini";
         std::string single_png;
         std::string single_png_mat;
         std::string overlay_path;

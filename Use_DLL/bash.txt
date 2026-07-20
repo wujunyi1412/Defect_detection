@@ -1,0 +1,34 @@
+cmake -S . -B ./build -G "Visual Studio 17 2022" -A x64
+cmake --build ./build --config Release
+
+• 编译后运行的是：
+
+  Use_DLL\build\bin\Release\use_examples.exe
+
+  单张 PNG：
+
+  Use_DLL\build\bin\Release\use_examples.exe --single-png E:\images\test.png --config Use_DLL\config.ini
+
+  指定检测图保存路径：
+
+  Use_DLL\build\bin\Release\use_examples.exe --single-png E:\images\test.png --config Use_DLL\config.ini --overlay E:
+  \out\test_detect.png
+
+  批量处理 PNG 文件夹：
+
+  Use_DLL\build\bin\Release\use_examples.exe --batch-png --input-dir D:\A_data_images\corona_test_0717\MT_images\22_images\pngs_use2 --output-dir outaa
+
+  递归子目录：
+
+  Use_DLL\build\bin\Release\use_examples.exe --batch-png --input-dir E:\images --output-dir E:\out --config
+  Use_DLL\config.ini --recurse
+
+  输出内容：
+
+  - 检测图：E:\out\detect_images\xxx_detect.png
+  - 汇总表：E:\out\summary.csv
+
+  如果不想保存检测图：
+
+  Use_DLL\build\bin\Release\use_examples.exe --batch-png --input-dir E:\images --output-dir E:\out --config
+  Use_DLL\config.ini --no-save-overlay
