@@ -2,10 +2,25 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "image_utils.h"
 
 namespace InspectionDLL::Internal {
+
+namespace {
+
+ContrastPolarity GetYoloContrastPolarity(const std::string& defect_name) {
+    if (defect_name == "Stain" || defect_name == "DarkClusters") {
+        return ContrastPolarity::Dark;
+    }
+    if (defect_name == "BrightStripes") {
+        return ContrastPolarity::Bright;
+    }
+    return ContrastPolarity::Auto;
+}
+
+}  // namespace
 
 YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
                         const cv::Mat& gray_yolo,
@@ -69,10 +84,8 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
             detail.area = 1;
         }
 
-        detail.contrast = CalculateContrastRatio(gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h);
-        if (detail.name == "Stain" && detail.contrast > 1.0f) {
-            detail.contrast = 1.0f / std::max(detail.contrast, 1e-6f);
-        }
+        detail.contrast = CalculateContrastRatio(gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
+                                                 GetYoloContrastPolarity(detail.name));
 
         if (detail.name == "Stain" && (detail.contrast <= dark_clusters_threshold || detail.contrast == 0.0f)) {
             detail.name = "DarkClusters";

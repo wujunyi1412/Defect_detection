@@ -67,7 +67,8 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
                              int x,
                              int y,
                              int w,
-                             int h) {
+                             int h,
+                             ContrastPolarity polarity) {
     if (gray_img.empty() || binary_mask.empty()) return 0.0f;
 
     cv::Mat g = gray_img;
@@ -180,9 +181,17 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
 
     float defect_mean = 0.0f;
     if (diff.size() >= 32) {
-        std::vector<float> tmp = diff;
-        const float s = Median(tmp);
-        if (s >= 0.0f) {
+        bool use_bright_tail = false;
+        if (polarity == ContrastPolarity::Bright) {
+            use_bright_tail = true;
+        } else if (polarity == ContrastPolarity::Dark) {
+            use_bright_tail = false;
+        } else {
+            std::vector<float> tmp = diff;
+            use_bright_tail = Median(tmp) >= 0.0f;
+        }
+
+        if (use_bright_tail) {
             const float thr = Percentile(diff, 70.0f);
             double sum = 0.0;
             size_t cnt = 0;
