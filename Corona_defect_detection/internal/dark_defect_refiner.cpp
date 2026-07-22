@@ -52,7 +52,7 @@ bool RefineDarkDefectGeometryOnly(const cv::Mat& gray_yolo, DetectionResult& det
 
         cv::Scalar mean_gray_small, std_gray_small;
         cv::Scalar mean_resp_small, std_resp_small;
-        cv::meanStdDev(roi_u8, mean_gray_small, std_gray_small);
+        cv::meanStdDev(roi_u8, mean_gray_small, std_gray_small); 
         cv::meanStdDev(dark_response_small, mean_resp_small, std_resp_small);
 
         const double seed_gray_thr = mean_gray_small[0] - std::max(6.0, 0.30 * std_gray_small[0]);

@@ -77,6 +77,7 @@ set(DLL_SOURCES
     Corona_defect_detection/internal/overlay_renderer.cpp
     Corona_defect_detection/internal/image_utils.cpp
     Corona_defect_detection/internal/dark_defect_refiner.cpp
+    Corona_defect_detection/internal/dark_defect_refiner_adaptive.cpp
     Corona_defect_detection/internal/patchcore_postprocess.cpp
     Corona_defect_detection/internal/yolo_postprocess.cpp
     Corona_defect_detection/internal/result_builder.cpp
