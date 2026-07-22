@@ -97,15 +97,8 @@ cv::Rect NonZeroBoundingRect(const cv::Mat& mask) {
     return points.empty() ? cv::Rect() : cv::boundingRect(points);
 }
 
-cv::Mat FindImageBorderBlackMask(const cv::Mat& context_u8,
-                                 const cv::Rect& context,
-                                 const cv::Size& image_size) {
+cv::Mat FindOuterBlackMask(const cv::Mat& context_u8, int transition_guard) {
     cv::Mat result(context_u8.size(), CV_8U, cv::Scalar(0));
-    const bool touches_left = context.x == 0;
-    const bool touches_top = context.y == 0;
-    const bool touches_right = context.x + context.width == image_size.width;
-    const bool touches_bottom = context.y + context.height == image_size.height;
-    if (!touches_left && !touches_top && !touches_right && !touches_bottom) return result;
 
     std::vector<float> values;
     values.reserve(context_u8.total());
@@ -123,17 +116,13 @@ cv::Mat FindImageBorderBlackMask(const cv::Mat& context_u8,
     if (label_count <= 1) return result;
 
     std::vector<uchar> border_labels(static_cast<size_t>(label_count), 0);
-    if (touches_left) {
-        for (int y = 0; y < labels.rows; ++y) border_labels[labels.at<int>(y, 0)] = 1;
+    for (int y = 0; y < labels.rows; ++y) {
+        border_labels[labels.at<int>(y, 0)] = 1;
+        border_labels[labels.at<int>(y, labels.cols - 1)] = 1;
     }
-    if (touches_right) {
-        for (int y = 0; y < labels.rows; ++y) border_labels[labels.at<int>(y, labels.cols - 1)] = 1;
-    }
-    if (touches_top) {
-        for (int x = 0; x < labels.cols; ++x) border_labels[labels.at<int>(0, x)] = 1;
-    }
-    if (touches_bottom) {
-        for (int x = 0; x < labels.cols; ++x) border_labels[labels.at<int>(labels.rows - 1, x)] = 1;
+    for (int x = 0; x < labels.cols; ++x) {
+        border_labels[labels.at<int>(0, x)] = 1;
+        border_labels[labels.at<int>(labels.rows - 1, x)] = 1;
     }
     border_labels[0] = 0;
 
@@ -144,7 +133,30 @@ cv::Mat FindImageBorderBlackMask(const cv::Mat& context_u8,
             if (border_labels[label_row[x]]) result_row[x] = 255;
         }
     }
+    if (transition_guard > 0 && cv::countNonZero(result) > 0) {
+        const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+        cv::dilate(result, result, kernel, cv::Point(-1, -1), transition_guard);
+    }
     return result;
+}
+
+bool IsLongProductBoundary(const cv::Mat& outer_black_in_detection) {
+    if (outer_black_in_detection.empty() || cv::countNonZero(outer_black_in_detection) == 0) {
+        return false;
+    }
+    const int width = outer_black_in_detection.cols;
+    const int height = outer_black_in_detection.rows;
+    const double aspect = static_cast<double>(std::max(width, height)) /
+                          std::max(1, std::min(width, height));
+    if (aspect < 6.0) return false;
+
+    const cv::Rect black_extent = NonZeroBoundingRect(outer_black_in_detection);
+    if (width >= height) {
+        return black_extent.width >= static_cast<int>(std::ceil(width * 0.75)) &&
+               black_extent.height <= static_cast<int>(std::ceil(height * 0.60));
+    }
+    return black_extent.height >= static_cast<int>(std::ceil(height * 0.75)) &&
+           black_extent.width <= static_cast<int>(std::ceil(width * 0.60));
 }
 
 }  // namespace
@@ -155,6 +167,11 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     const cv::Rect detection = ClampDetectionRect(detail, gray_yolo.size());
     if (detection.empty()) return false;
 
+    constexpr int kMaxRefinedBoxSide = 30;
+    if (detection.width > kMaxRefinedBoxSide || detection.height > kMaxRefinedBoxSide) {
+        return false;
+    }
+
     // Background samples come from outside the YOLO box whenever image borders allow it.
     const int short_side = std::min(detection.width, detection.height);
     const int margin = std::clamp(static_cast<int>(std::ceil(short_side * 0.30)), 4, 24);
@@ -164,8 +181,9 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
 
     const cv::Rect search(detection.x - context.x, detection.y - context.y,
                           detection.width, detection.height);
-    const cv::Mat image_border_black = FindImageBorderBlackMask(
-        context_u8, context, gray_yolo.size());
+    const int transition_guard = std::clamp(short_side / 12, 1, 3);
+    const cv::Mat image_border_black = FindOuterBlackMask(context_u8, transition_guard);
+    if (IsLongProductBoundary(image_border_black(search))) return false;
     cv::Mat background_mask(context.size(), CV_8U, cv::Scalar(255));
     background_mask(search).setTo(0);
     background_mask.setTo(0, image_border_black);
@@ -221,7 +239,12 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
 
     // Hysteresis keeps weak edges belonging to a strong stain while rejecting
     // isolated low-contrast background fluctuations.
-    const double grow_threshold = std::max(1.0, std::min(seed_threshold * 0.55, 1.25 * noise_sigma));
+    const bool is_small_detection = short_side <= 30;
+    const double grow_threshold = is_small_detection
+                                      ? std::max(1.5, std::max(seed_threshold * 0.65,
+                                                               1.75 * noise_sigma))
+                                      : std::max(1.0, std::min(seed_threshold * 0.55,
+                                                               1.25 * noise_sigma));
     cv::Mat seed_mask;
     cv::Mat grow_mask;
     cv::compare(response, seed_threshold, seed_mask, cv::CMP_GE);
@@ -230,7 +253,7 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     seed_mask.setTo(0, search_border_black);
     grow_mask.setTo(0, search_border_black);
 
-    if (short_side >= 12) {
+    if (!is_small_detection && short_side >= 12) {
         const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
         cv::morphologyEx(grow_mask, grow_mask, cv::MORPH_CLOSE, kernel);
         grow_mask.setTo(0, search_border_black);
@@ -240,7 +263,7 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     cv::Mat stats;
     cv::Mat centroids;
     const int label_count = cv::connectedComponentsWithStats(
-        grow_mask, labels, stats, centroids, 8, CV_32S);
+        grow_mask, labels, stats, centroids, is_small_detection ? 4 : 8, CV_32S);
     if (label_count <= 1) return false;
 
     const cv::Point2d detection_center((search.width - 1) * 0.5, (search.height - 1) * 0.5);
