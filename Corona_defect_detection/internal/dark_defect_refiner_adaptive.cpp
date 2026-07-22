@@ -301,11 +301,19 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     const int refined_area = cv::countNonZero(final_mask);
     if (refined.empty() || refined_area <= 0) return false;
 
-    detail.x = static_cast<float>(detection.x + refined.x);
-    detail.y = static_cast<float>(detection.y + refined.y);
+    const int refined_x = detection.x + refined.x;
+    const int refined_y = detection.y + refined.y;
+    const cv::Mat refined_mask = final_mask(refined);
+    const float refined_contrast = CalculateContrastRatioAdaptive(
+        gray_yolo, refined_mask, refined_x, refined_y, refined.width, refined.height,
+        ContrastPolarity::Dark);
+
+    detail.x = static_cast<float>(refined_x);
+    detail.y = static_cast<float>(refined_y);
     detail.w = static_cast<float>(refined.width);
     detail.h = static_cast<float>(refined.height);
     detail.area = refined_area;
+    if (refined_contrast > 0.0f) detail.contrast = refined_contrast;
     return true;
 }
 

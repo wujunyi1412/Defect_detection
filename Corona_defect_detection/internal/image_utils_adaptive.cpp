@@ -57,6 +57,56 @@ cv::Mat BuildDetectionMask(const cv::Mat& binary_mask,
     return local_u8;
 }
 
+cv::Mat FindOuterDarkRegion(const cv::Mat& gray_f32, int transition_guard) {
+    cv::Mat result(gray_f32.size(), CV_8U, cv::Scalar(0));
+    std::vector<float> values;
+    values.reserve(gray_f32.total());
+    for (int y = 0; y < gray_f32.rows; ++y) {
+        const float* row = gray_f32.ptr<float>(y);
+        for (int x = 0; x < gray_f32.cols; ++x) {
+            if (std::isfinite(row[x])) values.push_back(row[x]);
+        }
+    }
+    if (values.empty()) return result;
+
+    const float low_reference = Percentile(values, 10.0f);
+    const float material_reference = Percentile(values, 80.0f);
+    if (material_reference <= 0.0f) return result;
+    const float dark_threshold = std::min(material_reference * 0.35f,
+                                          low_reference + 0.20f *
+                                                              (material_reference - low_reference));
+
+    cv::Mat dark_candidates;
+    cv::compare(gray_f32, dark_threshold, dark_candidates, cv::CMP_LE);
+    cv::Mat labels;
+    const int label_count = cv::connectedComponents(dark_candidates, labels, 8, CV_32S);
+    if (label_count <= 1) return result;
+
+    std::vector<uchar> outer_labels(static_cast<size_t>(label_count), 0);
+    for (int y = 0; y < labels.rows; ++y) {
+        outer_labels[labels.at<int>(y, 0)] = 1;
+        outer_labels[labels.at<int>(y, labels.cols - 1)] = 1;
+    }
+    for (int x = 0; x < labels.cols; ++x) {
+        outer_labels[labels.at<int>(0, x)] = 1;
+        outer_labels[labels.at<int>(labels.rows - 1, x)] = 1;
+    }
+    outer_labels[0] = 0;
+
+    for (int y = 0; y < labels.rows; ++y) {
+        const int* label_row = labels.ptr<int>(y);
+        uchar* result_row = result.ptr<uchar>(y);
+        for (int x = 0; x < labels.cols; ++x) {
+            if (outer_labels[label_row[x]]) result_row[x] = 255;
+        }
+    }
+    if (transition_guard > 0 && cv::countNonZero(result) > 0) {
+        const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+        cv::dilate(result, result, kernel, cv::Point(-1, -1), transition_guard);
+    }
+    return result;
+}
+
 bool FitPlane(const std::vector<BackgroundSample>& samples,
               const std::vector<uchar>* selected,
               cv::Vec3d& coefficients) {
@@ -183,6 +233,9 @@ float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
     cv::dilate(foreground_mask, outer_dilated, outer_kernel);
     cv::Mat background_ring;
     cv::bitwise_and(outer_dilated, ~inner_dilated, background_ring);
+    const int transition_guard = std::clamp(std::min(detection.width, detection.height) / 12, 1, 3);
+    const cv::Mat outer_dark_region = FindOuterDarkRegion(gray_f32, transition_guard);
+    background_ring.setTo(0, outer_dark_region);
 
     std::vector<BackgroundSample> background_samples;
     background_samples.reserve(static_cast<size_t>(cv::countNonZero(background_ring)));

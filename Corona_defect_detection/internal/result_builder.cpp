@@ -109,14 +109,19 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         else if (d.name == "LineArtifacts") cf = &context.lineartifacts_filter;
 
         if (!cf) continue;
-        if (!cf->enable) continue;
-        if (d.score < cf->confidence_threshold) continue;
-        if (d.contrast < cf->contrast_threshold) continue;
 
         DetectionResult detail = d;
         if ((detail.name == "Stain" || detail.name == "DarkClusters") && cf->use_traditional_measure) {
-            RefineDarkDefectGeometryAdaptive(gray_yolo, detail);
+            if (RefineDarkDefectGeometryAdaptive(gray_yolo, detail)) {
+                detail.name = (detail.contrast <= context.dark_clusters_threshold || detail.contrast == 0.0f)
+                                  ? "DarkClusters"
+                                  : "Stain";
+                cf = detail.name == "Stain" ? &context.stain_filter : &context.darkclusters_filter;
+            }
         }
+        if (!cf->enable) continue;
+        if (detail.score < cf->confidence_threshold) continue;
+        if (detail.contrast < cf->contrast_threshold) continue;
         if (cf->min_width > 0 && detail.w < static_cast<float>(cf->min_width)) continue;
         if (cf->min_height > 0 && detail.h < static_cast<float>(cf->min_height)) continue;
         if (cf->min_area > 0 && detail.area < cf->min_area) continue;
