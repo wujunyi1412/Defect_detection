@@ -99,9 +99,6 @@ void DrawLabelBlock(
     if (y + block_h > img_h) y = std::max(0, img_h - block_h);
     if (y < 0) y = 0;
 
-    const cv::Rect bg(x, y, block_w, block_h);
-    cv::rectangle(vis, bg, bg_color, cv::FILLED);
-
     const int max_text_w = std::max(0, block_w - padding * 2);
     int cursor_y = y + padding;
     for (size_t i = 0; i < lines.size(); ++i) {
@@ -111,7 +108,7 @@ void DrawLabelBlock(
         const int org_x = x + padding;
         const int org_y = cursor_y + ts.height;
         if (org_x >= 0 && org_x < img_w && org_y >= 0 && org_y < img_h) {
-            cv::putText(vis, t, cv::Point(org_x, org_y), cv::FONT_HERSHEY_SIMPLEX, font_scale, cv::Scalar(0, 0, 0), thickness);
+            cv::putText(vis, t, cv::Point(org_x, org_y), cv::FONT_HERSHEY_SIMPLEX, font_scale, bg_color, thickness);
         }
         cursor_y += ts.height + baseline + line_gap;
         if (cursor_y >= y + block_h) break;
@@ -169,18 +166,14 @@ bool RenderResultOverlayToHalconHandle(
             const cv::Size ts = cv::getTextSize(res_text, cv::FONT_HERSHEY_SIMPLEX, font_scale, thickness, &baseline);
 
             const int padding = 6;
-            const int bg_w = std::min(ts.width + padding * 2, width);
-            const int bg_h = std::min(ts.height + baseline + padding * 2, height);
-            const cv::Rect bg(0, 0, bg_w, bg_h);
 
-            cv::rectangle(vis, bg, color, cv::FILLED);
             cv::putText(
                 vis,
                 res_text,
                 cv::Point(padding, padding + ts.height),
                 cv::FONT_HERSHEY_SIMPLEX,
                 font_scale,
-                cv::Scalar(0, 0, 0),
+                color,
                 thickness
             );
         }
