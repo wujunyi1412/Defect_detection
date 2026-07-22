@@ -84,7 +84,7 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
             detail.area = 1;
         }
 
-        detail.contrast = CalculateContrastRatio(gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
+        detail.contrast = CalculateContrastRatioAdaptive(gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
                                                  GetYoloContrastPolarity(detail.name));
 
         if (detail.name == "Stain" && (detail.contrast <= dark_clusters_threshold || detail.contrast == 0.0f)) {

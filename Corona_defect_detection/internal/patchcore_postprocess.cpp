@@ -234,7 +234,7 @@ PatchCoreDerived AnalyzePatchCore(const PatchCore::PatchCoreResult& patchcore_re
 
     if (!result.area_cropped.empty()) {
         result.area_orig = ResizePatchcoreMaskFromCropped(result.area_cropped, img_shape, cv::INTER_NEAREST);
-        result.contrast = CalculateContrastRatio(gray_patchcore, result.area_orig, result.x, result.y, result.w, result.h);
+        result.contrast = CalculateContrastRatioAdaptive(gray_patchcore, result.area_orig, result.x, result.y, result.w, result.h);
     }
 
     if (std::abs(score_threshold - area_threshold) < 1e-6f) {

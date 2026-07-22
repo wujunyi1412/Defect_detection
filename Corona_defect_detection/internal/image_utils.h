@@ -24,5 +24,12 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
                              int w,
                              int h,
                              ContrastPolarity polarity = ContrastPolarity::Auto);
+float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
+                                     const cv::Mat& binary_mask,
+                                     int x,
+                                     int y,
+                                     int w,
+                                     int h,
+                                     ContrastPolarity polarity = ContrastPolarity::Auto);
 
 }  // namespace InspectionDLL::Internal
