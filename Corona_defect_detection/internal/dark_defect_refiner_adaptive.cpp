@@ -97,6 +97,56 @@ cv::Rect NonZeroBoundingRect(const cv::Mat& mask) {
     return points.empty() ? cv::Rect() : cv::boundingRect(points);
 }
 
+cv::Mat FindImageBorderBlackMask(const cv::Mat& context_u8,
+                                 const cv::Rect& context,
+                                 const cv::Size& image_size) {
+    cv::Mat result(context_u8.size(), CV_8U, cv::Scalar(0));
+    const bool touches_left = context.x == 0;
+    const bool touches_top = context.y == 0;
+    const bool touches_right = context.x + context.width == image_size.width;
+    const bool touches_bottom = context.y + context.height == image_size.height;
+    if (!touches_left && !touches_top && !touches_right && !touches_bottom) return result;
+
+    std::vector<float> values;
+    values.reserve(context_u8.total());
+    for (int y = 0; y < context_u8.rows; ++y) {
+        const uchar* row = context_u8.ptr<uchar>(y);
+        for (int x = 0; x < context_u8.cols; ++x) values.push_back(row[x]);
+    }
+    const double foreground_reference = Percentile(values, 80.0f);
+    const double black_threshold = std::clamp(foreground_reference * 0.30, 6.0, 64.0);
+
+    cv::Mat black_candidates;
+    cv::compare(context_u8, black_threshold, black_candidates, cv::CMP_LE);
+    cv::Mat labels;
+    const int label_count = cv::connectedComponents(black_candidates, labels, 8, CV_32S);
+    if (label_count <= 1) return result;
+
+    std::vector<uchar> border_labels(static_cast<size_t>(label_count), 0);
+    if (touches_left) {
+        for (int y = 0; y < labels.rows; ++y) border_labels[labels.at<int>(y, 0)] = 1;
+    }
+    if (touches_right) {
+        for (int y = 0; y < labels.rows; ++y) border_labels[labels.at<int>(y, labels.cols - 1)] = 1;
+    }
+    if (touches_top) {
+        for (int x = 0; x < labels.cols; ++x) border_labels[labels.at<int>(0, x)] = 1;
+    }
+    if (touches_bottom) {
+        for (int x = 0; x < labels.cols; ++x) border_labels[labels.at<int>(labels.rows - 1, x)] = 1;
+    }
+    border_labels[0] = 0;
+
+    for (int y = 0; y < labels.rows; ++y) {
+        const int* label_row = labels.ptr<int>(y);
+        uchar* result_row = result.ptr<uchar>(y);
+        for (int x = 0; x < labels.cols; ++x) {
+            if (border_labels[label_row[x]]) result_row[x] = 255;
+        }
+    }
+    return result;
+}
+
 }  // namespace
 
 bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult& detail) {
@@ -114,8 +164,11 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
 
     const cv::Rect search(detection.x - context.x, detection.y - context.y,
                           detection.width, detection.height);
+    const cv::Mat image_border_black = FindImageBorderBlackMask(
+        context_u8, context, gray_yolo.size());
     cv::Mat background_mask(context.size(), CV_8U, cv::Scalar(255));
     background_mask(search).setTo(0);
+    background_mask.setTo(0, image_border_black);
 
     // At an image edge there may be too little outer context. Fall back to a thin
     // band inside the detection, which is still more robust than the ROI mean.
@@ -128,6 +181,7 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
         search_background.rowRange(search.height - band, search.height).setTo(255);
         search_background.colRange(0, band).setTo(255);
         search_background.colRange(search.width - band, search.width).setTo(255);
+        background_mask.setTo(0, image_border_black);
     }
     if (cv::countNonZero(background_mask) == 0) return false;
 
@@ -172,10 +226,14 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     cv::Mat grow_mask;
     cv::compare(response, seed_threshold, seed_mask, cv::CMP_GE);
     cv::compare(response, grow_threshold, grow_mask, cv::CMP_GE);
+    const cv::Mat search_border_black = image_border_black(search);
+    seed_mask.setTo(0, search_border_black);
+    grow_mask.setTo(0, search_border_black);
 
     if (short_side >= 12) {
         const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
         cv::morphologyEx(grow_mask, grow_mask, cv::MORPH_CLOSE, kernel);
+        grow_mask.setTo(0, search_border_black);
     }
 
     cv::Mat labels;

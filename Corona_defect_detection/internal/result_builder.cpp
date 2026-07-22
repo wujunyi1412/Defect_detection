@@ -115,7 +115,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
 
         DetectionResult detail = d;
         if ((detail.name == "Stain" || detail.name == "DarkClusters") && cf->use_traditional_measure) {
-            RefineDarkDefectGeometryOnly(gray_yolo, detail);
+            RefineDarkDefectGeometryAdaptive(gray_yolo, detail);
         }
         if (cf->min_width > 0 && detail.w < static_cast<float>(cf->min_width)) continue;
         if (cf->min_height > 0 && detail.h < static_cast<float>(cf->min_height)) continue;
