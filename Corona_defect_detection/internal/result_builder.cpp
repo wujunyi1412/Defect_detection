@@ -7,6 +7,14 @@
 #include "image_utils.h"
 
 namespace InspectionDLL::Internal {
+namespace {
+
+bool PassContrastThreshold(float contrast, float threshold) {
+    if (threshold <= 0.0f) return true;
+    return IsContrastRatioValid(contrast) && contrast >= threshold;
+}
+
+}  // namespace
 
 void ComposeOutput(const PatchCoreDerived& pc,
                    const YoloDerived& yolo,
@@ -113,15 +121,17 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         DetectionResult detail = d;
         if ((detail.name == "Stain" || detail.name == "DarkClusters") && cf->use_traditional_measure) {
             if (RefineDarkDefectGeometryAdaptive(gray_yolo, detail)) {
-                detail.name = (detail.contrast <= context.dark_clusters_threshold || detail.contrast == 0.0f)
-                                  ? "DarkClusters"
-                                  : "Stain";
-                cf = detail.name == "Stain" ? &context.stain_filter : &context.darkclusters_filter;
+                if (IsContrastRatioValid(detail.contrast)) {
+                    detail.name = detail.contrast <= context.dark_clusters_threshold
+                                      ? "DarkClusters"
+                                      : "Stain";
+                    cf = detail.name == "Stain" ? &context.stain_filter : &context.darkclusters_filter;
+                }
             }
         }
         if (!cf->enable) continue;
         if (detail.score < cf->confidence_threshold) continue;
-        if (detail.contrast < cf->contrast_threshold) continue;
+        if (!PassContrastThreshold(detail.contrast, cf->contrast_threshold)) continue;
         if (cf->min_width > 0 && detail.w < static_cast<float>(cf->min_width)) continue;
         if (cf->min_height > 0 && detail.h < static_cast<float>(cf->min_height)) continue;
         if (cf->min_area > 0 && detail.area < cf->min_area) continue;
@@ -142,7 +152,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         (context.abnormal_filter.min_width <= 0 || pc.w >= context.abnormal_filter.min_width) &&
         (context.abnormal_filter.min_height <= 0 || pc.h >= context.abnormal_filter.min_height) &&
         (context.abnormal_filter.min_area <= 0 || pc.area >= context.abnormal_filter.min_area) &&
-        (pc.contrast >= context.abnormal_filter.contrast_threshold);
+        PassContrastThreshold(pc.contrast, context.abnormal_filter.contrast_threshold);
 
     if (pc.has_crosshair_grid && abnormal_is_ng) {
         std::vector<Component> comps = pc.crosshair_components;
@@ -169,7 +179,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
             if (context.abnormal_filter.min_width > 0 && w1 < context.abnormal_filter.min_width) continue;
             if (context.abnormal_filter.min_height > 0 && h1 < context.abnormal_filter.min_height) continue;
             if (context.abnormal_filter.min_area > 0 && area < context.abnormal_filter.min_area) continue;
-            if (contrast < context.abnormal_filter.contrast_threshold) continue;
+            if (!PassContrastThreshold(contrast, context.abnormal_filter.contrast_threshold)) continue;
 
             DetectionResult detail;
             detail.name = "Abnormal";

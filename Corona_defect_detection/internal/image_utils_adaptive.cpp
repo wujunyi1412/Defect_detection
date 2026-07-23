@@ -2,10 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace InspectionDLL::Internal {
 namespace {
+
+float InvalidContrastRatio() {
+    return std::numeric_limits<float>::quiet_NaN();
+}
 
 struct BackgroundSample {
     double x;
@@ -202,13 +207,15 @@ float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
                                      int w,
                                      int h,
                                      ContrastPolarity polarity) {
-    if (gray_img.empty() || binary_mask.empty() || gray_img.channels() != 1) return 0.0f;
+    if (gray_img.empty() || binary_mask.empty() || gray_img.channels() != 1) {
+        return InvalidContrastRatio();
+    }
 
     const cv::Rect detection = ClampRect(x, y, w, h, gray_img.size());
-    if (detection.empty()) return 0.0f;
+    if (detection.empty()) return InvalidContrastRatio();
     const cv::Mat detection_mask = BuildDetectionMask(binary_mask, detection, gray_img.size());
     const int foreground_area = detection_mask.empty() ? 0 : cv::countNonZero(detection_mask);
-    if (foreground_area <= 0) return 0.0f;
+    if (foreground_area <= 0) return InvalidContrastRatio();
 
     const double equivalent_radius = std::sqrt(static_cast<double>(foreground_area) / CV_PI);
     const int inner_radius = std::clamp(static_cast<int>(std::round(equivalent_radius * 0.20)), 2, 8);
@@ -253,7 +260,7 @@ float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
     cv::Vec3d background_plane;
     double background_median = 0.0;
     if (!FitRobustBackgroundPlane(background_samples, background_plane, background_median)) {
-        return 0.0f;
+        return InvalidContrastRatio();
     }
 
     const double denominator_floor = std::max(1.0, std::abs(background_median) * 0.10);
@@ -273,7 +280,9 @@ float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
             }
         }
     }
-    return RobustForegroundRatio(std::move(foreground_ratios), polarity);
+    if (foreground_ratios.empty()) return InvalidContrastRatio();
+    const float ratio = RobustForegroundRatio(std::move(foreground_ratios), polarity);
+    return IsContrastRatioValid(ratio) ? ratio : InvalidContrastRatio();
 }
 
 }  // namespace InspectionDLL::Internal

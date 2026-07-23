@@ -10,6 +10,7 @@
 namespace InspectionDLL::Internal {
 namespace {
 
+// 根据检测框的坐标和宽高，计算出一个 ROI 的矩形框，确保其在图像内
 cv::Rect ClampDetectionRect(const DetectionResult& detail, const cv::Size& image_size) {
     if (image_size.width <= 0 || image_size.height <= 0 ||
         !std::isfinite(detail.x) || !std::isfinite(detail.y) ||
@@ -30,6 +31,7 @@ cv::Rect ClampDetectionRect(const DetectionResult& detail, const cv::Size& image
     return cv::Rect(x1, y1, x2 - x1, y2 - y1);
 }
 
+// 根据检测框的坐标和宽高，计算出一个扩展后的矩形框，确保其在图像内
 cv::Rect ExpandRect(const cv::Rect& rect, int margin, const cv::Size& image_size) {
     const int x1 = std::max(0, rect.x - margin);
     const int y1 = std::max(0, rect.y - margin);
@@ -38,10 +40,12 @@ cv::Rect ExpandRect(const cv::Rect& rect, int margin, const cv::Size& image_size
     return cv::Rect(x1, y1, x2 - x1, y2 - y1);
 }
 
+// 根据图像和掩码，计算掩码区域内的中值
 double MaskedMedian(const cv::Mat& image, const cv::Mat& mask) {
     std::vector<float> values;
     values.reserve(static_cast<size_t>(cv::countNonZero(mask)));
     for (int y = 0; y < image.rows; ++y) {
+        // 遍历图像的每一行，只处理掩码为非零的像素
         const uchar* image_row = image.ptr<uchar>(y);
         const uchar* mask_row = mask.ptr<uchar>(y);
         for (int x = 0; x < image.cols; ++x) {
@@ -51,6 +55,7 @@ double MaskedMedian(const cv::Mat& image, const cv::Mat& mask) {
     return static_cast<double>(Median(values));
 }
 
+// 根据图像和掩码，拟合一个背景平面，返回平面的系数和残差标准差
 bool FitBackgroundPlane(const cv::Mat& image, const cv::Mat& mask,
                         cv::Vec3d& coefficients, double& residual_sigma) {
     cv::Matx33d normal = cv::Matx33d::zeros();
@@ -61,27 +66,35 @@ bool FitBackgroundPlane(const cv::Mat& image, const cv::Mat& mask,
         const uchar* mask_row = mask.ptr<uchar>(y);
         for (int x = 0; x < image.cols; ++x) {
             if (!mask_row[x]) continue;
+            // 遍历掩码为非零的像素，将其坐标变成 (x, y, 1) 的形式
             const cv::Vec3d sample(static_cast<double>(x), static_cast<double>(y), 1.0);
+            // 同时得到像素值
             const double value = image_row[x];
+            // 计算坐标的外积，得到一个 3x3 的矩阵
             normal += sample * sample.t();
+            // 计算像素值与坐标的乘积，得到一个 3x1 的向量
             rhs += sample * value;
             ++sample_count;
         }
     }
+    // 如果样本数量不足 3 个，或者无法求解线性方程组(三点不共线)，返回 false
     if (sample_count < 3 || !cv::solve(normal, rhs, coefficients, cv::DECOMP_SVD)) return false;
 
     std::vector<float> residuals;
+    // 计算每个像素的预测值与实际值的差，得到残差向量
     residuals.reserve(static_cast<size_t>(sample_count));
     for (int y = 0; y < image.rows; ++y) {
         const uchar* image_row = image.ptr<uchar>(y);
         const uchar* mask_row = mask.ptr<uchar>(y);
         for (int x = 0; x < image.cols; ++x) {
             if (!mask_row[x]) continue;
+            // 计算预测值，即系数与坐标的点积
             const double predicted = coefficients[0] * x + coefficients[1] * y + coefficients[2];
             residuals.push_back(static_cast<float>(image_row[x] - predicted));
         }
     }
 
+    // 对残差向量取中值，将其加到背景系数的第三项上，作为背景的基线
     const double residual_median = Median(residuals);
     coefficients[2] += residual_median;
     for (float& residual : residuals) {
@@ -91,12 +104,14 @@ bool FitBackgroundPlane(const cv::Mat& image, const cv::Mat& mask,
     return true;
 }
 
+// 根据掩码，计算非零像素的最小外接矩形
 cv::Rect NonZeroBoundingRect(const cv::Mat& mask) {
     std::vector<cv::Point> points;
     cv::findNonZero(mask, points);
     return points.empty() ? cv::Rect() : cv::boundingRect(points);
 }
 
+// 找到图像中最外层的黑色区域(掩码)
 cv::Mat FindOuterBlackMask(const cv::Mat& context_u8, int transition_guard) {
     cv::Mat result(context_u8.size(), CV_8U, cv::Scalar(0));
 
@@ -106,15 +121,20 @@ cv::Mat FindOuterBlackMask(const cv::Mat& context_u8, int transition_guard) {
         const uchar* row = context_u8.ptr<uchar>(y);
         for (int x = 0; x < context_u8.cols; ++x) values.push_back(row[x]);
     }
+    // 计算图像像素值的 80% 分位数，作为前景的参考值
     const double foreground_reference = Percentile(values, 80.0f);
+    // 计算黑色阈值，确保其在 [6.0, 64.0] 范围内
     const double black_threshold = std::clamp(foreground_reference * 0.30, 6.0, 64.0);
 
     cv::Mat black_candidates;
+    // 找到所有像素值小于等于黑色阈值的候选区域
     cv::compare(context_u8, black_threshold, black_candidates, cv::CMP_LE);
     cv::Mat labels;
+    // 对候选区域进行连通域分析，得到不同的黑色区域(每个区域用不同的标签表示，最后一共有 label_count + 1 个区域)
     const int label_count = cv::connectedComponents(black_candidates, labels, 8, CV_32S);
     if (label_count <= 1) return result;
 
+    // 构建边界标签，用于标记黑色区域的边界像素
     std::vector<uchar> border_labels(static_cast<size_t>(label_count), 0);
     for (int y = 0; y < labels.rows; ++y) {
         border_labels[labels.at<int>(y, 0)] = 1;
@@ -126,6 +146,7 @@ cv::Mat FindOuterBlackMask(const cv::Mat& context_u8, int transition_guard) {
     }
     border_labels[0] = 0;
 
+    // 遍历所有像素，将边界像素设为白色，其他像素设为黑色
     for (int y = 0; y < labels.rows; ++y) {
         const int* label_row = labels.ptr<int>(y);
         uchar* result_row = result.ptr<uchar>(y);
@@ -133,6 +154,7 @@ cv::Mat FindOuterBlackMask(const cv::Mat& context_u8, int transition_guard) {
             if (border_labels[label_row[x]]) result_row[x] = 255;
         }
     }
+    // 如果指定了过渡守卫值，且结果中仍有非零像素，则对结果进行膨胀操作，以扩展黑色区域的边界
     if (transition_guard > 0 && cv::countNonZero(result) > 0) {
         const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
         cv::dilate(result, result, kernel, cv::Point(-1, -1), transition_guard);
@@ -140,6 +162,7 @@ cv::Mat FindOuterBlackMask(const cv::Mat& context_u8, int transition_guard) {
     return result;
 }
 
+// 判断检测框内的最外层黑色区域是否为长边界
 bool IsLongProductBoundary(const cv::Mat& outer_black_in_detection) {
     if (outer_black_in_detection.empty() || cv::countNonZero(outer_black_in_detection) == 0) {
         return false;
@@ -164,26 +187,32 @@ bool IsLongProductBoundary(const cv::Mat& outer_black_in_detection) {
 bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult& detail) {
     if (gray_yolo.empty() || gray_yolo.channels() != 1) return false;
 
+    // 计算检测框的坐标和宽高，确保其在图像内
     const cv::Rect detection = ClampDetectionRect(detail, gray_yolo.size());
     if (detection.empty()) return false;
 
+    // 可以二次处理的最大检测框边长
     constexpr int kMaxRefinedBoxSide = 30;
     if (detection.width > kMaxRefinedBoxSide || detection.height > kMaxRefinedBoxSide) {
         return false;
     }
 
-    // Background samples come from outside the YOLO box whenever image borders allow it.
+    // 扩充检测框的上下文区域，并确保其在图像内
     const int short_side = std::min(detection.width, detection.height);
     const int margin = std::clamp(static_cast<int>(std::ceil(short_side * 0.30)), 4, 24);
     const cv::Rect context = ExpandRect(detection, margin, gray_yolo.size());
     cv::Mat context_u8 = ConvertGrayToU8Normalized(gray_yolo(context));
     if (context_u8.empty()) return false;
 
+    // 计算检测框在上下文区域内的坐标和宽高
     const cv::Rect search(detection.x - context.x, detection.y - context.y,
                           detection.width, detection.height);
     const int transition_guard = std::clamp(short_side / 12, 1, 3);
+    // 找到上下文区域内的最外层黑色区域(掩码)
     const cv::Mat image_border_black = FindOuterBlackMask(context_u8, transition_guard);
     if (IsLongProductBoundary(image_border_black(search))) return false;
+
+    // 背景掩码，缺陷区域和最外层黑色区域置零
     cv::Mat background_mask(context.size(), CV_8U, cv::Scalar(255));
     background_mask(search).setTo(0);
     background_mask.setTo(0, image_border_black);
@@ -313,7 +342,7 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     detail.w = static_cast<float>(refined.width);
     detail.h = static_cast<float>(refined.height);
     detail.area = refined_area;
-    if (refined_contrast > 0.0f) detail.contrast = refined_contrast;
+    if (IsContrastRatioValid(refined_contrast)) detail.contrast = refined_contrast;
     return true;
 }
 

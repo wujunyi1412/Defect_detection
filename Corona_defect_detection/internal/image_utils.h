@@ -15,6 +15,10 @@ enum class ContrastPolarity {
     Bright,
 };
 
+// A finite value, including 0.0f, is a successfully calculated contrast ratio.
+// NaN represents a calculation failure.
+bool IsContrastRatioValid(float contrast_ratio);
+
 float Median(std::vector<float>& values);
 float Percentile(std::vector<float> values, float p);
 float CalculateContrastRatio(const cv::Mat& gray_img,

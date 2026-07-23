@@ -2,10 +2,22 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "image_process.h"
 
 namespace InspectionDLL::Internal {
+namespace {
+
+float InvalidContrastRatio() {
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+}  // namespace
+
+bool IsContrastRatioValid(float contrast_ratio) {
+    return std::isfinite(contrast_ratio) && contrast_ratio >= 0.0f;
+}
 
 cv::Mat ProcessTIF32ForPatchcore(const cv::Mat& img, int max_border) {
     cv::Mat img_normalize = ImageProcess::ImageProcessor::Cvmat2Uint8(img);
@@ -69,7 +81,7 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
                              int w,
                              int h,
                              ContrastPolarity polarity) {
-    if (gray_img.empty() || binary_mask.empty()) return 0.0f;
+    if (gray_img.empty() || binary_mask.empty()) return InvalidContrastRatio();
 
     cv::Mat g = gray_img;
     cv::Mat m = binary_mask;
@@ -81,12 +93,12 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
         const int y0 = static_cast<int>(std::max(0, std::min(y, H - 1)));
         const int x1 = static_cast<int>(std::max(x0 + 1, std::min(x + w, W)));
         const int y1 = static_cast<int>(std::max(y0 + 1, std::min(y + h, H)));
-        if (x1 <= x0 || y1 <= y0) return 0.0f;
+        if (x1 <= x0 || y1 <= y0) return InvalidContrastRatio();
         g = gray_img(cv::Rect(x0, y0, x1 - x0, y1 - y0));
         m = binary_mask(cv::Rect(x0, y0, x1 - x0, y1 - y0));
     }
 
-    if (g.empty()) return 0.0f;
+    if (g.empty()) return InvalidContrastRatio();
 
     cv::Mat g32;
     if (g.type() == CV_32F) {
@@ -102,10 +114,10 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
         m.convertTo(m_u8, CV_8U);
     }
     cv::threshold(m_u8, m_u8, 0, 255, cv::THRESH_BINARY);
-    if (cv::countNonZero(m_u8) == 0) return 0.0f;
+    if (cv::countNonZero(m_u8) == 0) return InvalidContrastRatio();
 
     const int min_dim = std::min(g32.rows, g32.cols);
-    if (min_dim <= 0) return 0.0f;
+    if (min_dim <= 0) return InvalidContrastRatio();
 
     const int r2 = static_cast<int>(std::clamp(static_cast<int>(std::round(static_cast<float>(min_dim) * 0.12f)), 6, 24));
     const int r1 = static_cast<int>(std::clamp(static_cast<int>(std::round(static_cast<float>(r2) * 0.25f)), 2, std::max(2, r2 - 2)));
@@ -122,7 +134,7 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
         bg = cv::Scalar(255) - m_u8;
     }
     cv::threshold(bg, bg, 0, 255, cv::THRESH_BINARY);
-    if (cv::countNonZero(bg) == 0) return 0.0f;
+    if (cv::countNonZero(bg) == 0) return InvalidContrastRatio();
 
     std::vector<float> defect_vals;
     std::vector<float> bg_vals;
@@ -138,7 +150,7 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
             if (pb[xx]) bg_vals.push_back(v);
         }
     }
-    if (defect_vals.empty() || bg_vals.empty()) return 0.0f;
+    if (defect_vals.empty() || bg_vals.empty()) return InvalidContrastRatio();
 
     constexpr float eps = 1e-6f;
     constexpr float low_clip = 8.0f;
@@ -224,7 +236,7 @@ float CalculateContrastRatio(const cv::Mat& gray_img,
 
     const float denom = std::max(bg_mean, low_clip) + eps;
     const float ratio = defect_mean / denom;
-    if (!std::isfinite(ratio)) return 0.0f;
+    if (!IsContrastRatioValid(ratio)) return InvalidContrastRatio();
     return ratio;
 }
 
