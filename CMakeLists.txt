@@ -2,6 +2,32 @@ cmake_minimum_required(VERSION 3.16)
 
 project(Corona_defect_detection VERSION 1.0.0 LANGUAGES CXX)
 
+# set(CORONA_COMPANY_NAME "Corona Defect Detection" CACHE STRING "DLL company name")
+set(CORONA_FILE_DESCRIPTION "Corona Defect Detection Inference Library" CACHE STRING "DLL file description")
+set(CORONA_PRODUCT_NAME "Corona Defect Detection" CACHE STRING "DLL product name")
+# set(CORONA_LEGAL_COPYRIGHT "Copyright (C) 2026" CACHE STRING "DLL copyright")
+# set(CORONA_COMMENTS "ONNX-based defect detection inference DLL" CACHE STRING "DLL comments")
+
+if(WIN32)
+    enable_language(RC)
+
+    # Windows VERSIONINFO requires four numeric version components.
+    set(CORONA_VERSION_TWEAK "${PROJECT_VERSION_TWEAK}")
+    if(CORONA_VERSION_TWEAK STREQUAL "")
+        set(CORONA_VERSION_TWEAK 0)
+    endif()
+    set(CORONA_VERSION_STRING
+        "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.${CORONA_VERSION_TWEAK}")
+
+    set(CORONA_VERSION_RESOURCE
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/Corona_defect_detection_version.rc")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/windows_version_info.rc.in"
+        "${CORONA_VERSION_RESOURCE}"
+        @ONLY
+    )
+endif()
+
 if(MSVC)
     add_compile_options(/utf-8)
 endif()
@@ -87,6 +113,10 @@ set(DLL_SOURCES
     image_process/image_process.cpp      
 )
 
+if(WIN32)
+    list(APPEND DLL_SOURCES "${CORONA_VERSION_RESOURCE}")
+endif()
+
 set(DLL_HEADERS
     config/config.h
     config/ini_parser.h
@@ -105,6 +135,10 @@ set(DLL_HEADERS
 )
 
 add_library(Corona_defect_detection SHARED ${DLL_SOURCES} ${DLL_HEADERS})
+
+set_target_properties(Corona_defect_detection PROPERTIES
+    VERSION "${PROJECT_VERSION}"
+)
 
 target_compile_definitions(Corona_defect_detection PRIVATE INSPECTION_CAPI_EXPORTS)
 
