@@ -115,6 +115,42 @@ void DrawLabelBlock(
     }
 }
 
+cv::Mat BuildFullImageMask(const cv::Mat& source, const cv::Rect& detection, const cv::Size& image_size) {
+    if (source.empty() || source.channels() != 1 || detection.empty()) return {};
+
+    cv::Mat binary;
+    source.convertTo(binary, CV_8U);
+    cv::threshold(binary, binary, 0, 255, cv::THRESH_BINARY);
+
+    cv::Mat full_mask(image_size, CV_8U, cv::Scalar(0));
+    if (binary.size() == image_size) {
+        binary(detection).copyTo(full_mask(detection));
+    } else {
+        cv::Mat local;
+        if (binary.size() == detection.size()) {
+            local = binary;
+        } else {
+            cv::resize(binary, local, detection.size(), 0.0, 0.0, cv::INTER_NEAREST);
+        }
+        local.copyTo(full_mask(detection));
+    }
+    return full_mask;
+}
+
+void DrawDefectMask(cv::Mat& vis,
+                    const cv::Mat& source_mask,
+                    const cv::Rect& detection,
+                    const InspectionDLL::MaskOverlayOptions& options) {
+    const cv::Mat mask = BuildFullImageMask(source_mask, detection, vis.size());
+    if (mask.empty() || cv::countNonZero(mask) == 0) return;
+
+    cv::Mat color_layer(vis.size(), vis.type(),
+                        cv::Scalar(options.color_b, options.color_g, options.color_r));
+    cv::Mat blended;
+    cv::addWeighted(vis, 1.0 - options.alpha, color_layer, options.alpha, 0.0, blended);
+    blended.copyTo(vis, mask);
+}
+
 }  // namespace
 
 // 渲染推理结果到Halcon图像句柄
@@ -124,6 +160,7 @@ bool RenderResultOverlayToHalconHandle(
     int32_t height,
     const InspectionDLL::InferenceResult& result,
     bool draw_box_details,
+    const InspectionDLL::MaskOverlayOptions& mask_options,
     int32_t o_imageHandle[1],
     std::string& err) {
     if (!image_array) {
@@ -179,6 +216,19 @@ bool RenderResultOverlayToHalconHandle(
         }
 
         const size_t det_n = result.details.size();
+        if (mask_options.enabled && mask_options.alpha > 0.0f) {
+            for (size_t i = 0; i < det_n; ++i) {
+                const auto& d = result.details[i];
+                cv::Rect r(
+                    static_cast<int>(std::round(d.x)),
+                    static_cast<int>(std::round(d.y)),
+                    static_cast<int>(std::round(d.w)),
+                    static_cast<int>(std::round(d.h)));
+                r &= cv::Rect(0, 0, width, height);
+                if (!r.empty()) DrawDefectMask(vis, d.mask, r, mask_options);
+            }
+        }
+
         for (size_t i = 0; i < det_n; ++i) {
             const auto& d = result.details[i];
             const int x = static_cast<int>(std::round(d.x));

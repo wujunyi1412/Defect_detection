@@ -19,6 +19,15 @@ struct DetectionResult {
     float x, y, w, h;
     float contrast;
     float score;
+    cv::Mat mask;
+};
+
+struct MaskOverlayOptions {
+    bool enabled = false;
+    int color_r = 255;
+    int color_g = 0;
+    int color_b = 0;
+    float alpha = 0.35f;
 };
 
 struct InferenceResult {
@@ -49,6 +58,8 @@ public:
     DLL_EXPORT void SetYoloNmsMode(bool class_aware);
 
     DLL_EXPORT bool ShouldDrawBoxDetails() const;
+
+    DLL_EXPORT MaskOverlayOptions GetMaskOverlayOptions() const;
 
     DLL_EXPORT const std::string& GetLastError() const;
     

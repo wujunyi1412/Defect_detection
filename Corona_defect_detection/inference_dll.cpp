@@ -30,6 +30,7 @@ public:
     float mask_area_threshold_ = 0.01f;
     float dark_clusters_threshold_ = 0.8f;
     bool draw_box_details_ = true;
+    MaskOverlayOptions mask_overlay_options_;
     std::string last_error_;
 
     AbnormalFilter abnormal_filter_;
@@ -97,6 +98,11 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->mask_area_threshold_ = config.patchcore_mask_area_threshold;
     pImpl->dark_clusters_threshold_ = config.dark_clusters_threshold;
     pImpl->draw_box_details_ = config.draw_box_details;
+    pImpl->mask_overlay_options_.enabled = config.draw_defect_mask;
+    pImpl->mask_overlay_options_.color_r = config.defect_mask_color_r;
+    pImpl->mask_overlay_options_.color_g = config.defect_mask_color_g;
+    pImpl->mask_overlay_options_.color_b = config.defect_mask_color_b;
+    pImpl->mask_overlay_options_.alpha = config.defect_mask_alpha;
 
     pImpl->abnormal_filter_ = config.abnormal_filter;
     pImpl->stain_filter_ = config.stain_filter;
@@ -252,6 +258,10 @@ void InspectionEngine::SetYoloNmsMode(bool class_aware) {
 // 是否绘制框详情
 bool InspectionEngine::ShouldDrawBoxDetails() const {
     return pImpl->draw_box_details_;
+}
+
+MaskOverlayOptions InspectionEngine::GetMaskOverlayOptions() const {
+    return pImpl->mask_overlay_options_;
 }
 
 // 获取最后一次错误信息

@@ -39,6 +39,11 @@ struct InspectionConfigData {
     float patchcore_mask_area_threshold = 0.3f;
     float dark_clusters_threshold = 0.8f;
     bool draw_box_details = true;
+    bool draw_defect_mask = false;
+    int defect_mask_color_r = 255;
+    int defect_mask_color_g = 0;
+    int defect_mask_color_b = 0;
+    float defect_mask_alpha = 0.35f;
     bool log_enabled = true;
     std::string log_level = "info";
     bool log_to_stderr = true;

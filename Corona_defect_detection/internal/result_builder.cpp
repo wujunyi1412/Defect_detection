@@ -66,6 +66,7 @@ void ComposeOutput(const PatchCoreDerived& pc,
             detail.h = static_cast<float>(h1);
             detail.contrast = contrast;
             detail.score = pc.score;
+            detail.mask = pc.score_orig;
             output.details.push_back(detail);
         }
     }
@@ -82,6 +83,7 @@ void ComposeOutput(const PatchCoreDerived& pc,
         detail.h = static_cast<float>(pc.h);
         detail.contrast = pc.contrast;
         detail.score = pc.score;
+        detail.mask = pc.area_orig;
         output.details.push_back(detail);
     } else if (has_yolo_detections && pc.has_defect) {
         if (!pc.has_crosshair_grid) {
@@ -94,6 +96,7 @@ void ComposeOutput(const PatchCoreDerived& pc,
             detail.h = static_cast<float>(pc.h);
             detail.contrast = pc.contrast;
             detail.score = pc.score;
+            detail.mask = pc.area_orig;
             output.details.push_back(detail);
         }
         output.details.insert(output.details.end(), yolo.details.begin(), yolo.details.end());
@@ -190,6 +193,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
             detail.h = static_cast<float>(h1);
             detail.contrast = contrast;
             detail.score = pc.score;
+            detail.mask = pc.score_orig;
             pc_details_filtered.push_back(detail);
         }
     } else if (abnormal_pass_base) {
@@ -203,6 +207,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
             detail.h = static_cast<float>(pc.h);
             detail.contrast = pc.contrast;
             detail.score = pc.score;
+            detail.mask = pc.area_orig;
             pc_details_filtered.push_back(detail);
         }
     }

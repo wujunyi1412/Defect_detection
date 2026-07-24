@@ -51,6 +51,7 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
         cv::Mat mask_uint8;
         det.mask.convertTo(mask_uint8, CV_8U);
         cv::threshold(mask_uint8, mask_uint8, 0, 255, cv::THRESH_BINARY);
+        detail.mask = mask_uint8.clone();
         detail.area = static_cast<int>(cv::countNonZero(mask_uint8));
 
         const int W = gray_yolo.cols;

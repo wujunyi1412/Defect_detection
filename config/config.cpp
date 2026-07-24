@@ -51,6 +51,14 @@ bool ValidateNonNegative(float value, const char* name, std::string& err) {
     return true;
 }
 
+bool ValidateColorChannel(int value, const char* name, std::string& err) {
+    if (value < 0 || value > 255) {
+        err = std::string(name) + " must be in [0, 255]";
+        return false;
+    }
+    return true;
+}
+
 bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
     if (!fs::exists(out.yolo_model_path)) {
         err = "yolo_model_path does not exist: " + out.yolo_model_path;
@@ -81,6 +89,13 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
     if (!ValidateNonNegative(out.patchcore_area_threshold, "patchcore.area_threshold", err)) return false;
     if (!ValidateNonNegative(out.patchcore_mask_area_threshold, "patchcore.mask_area_threshold", err)) return false;
     if (!ValidateNonNegative(out.dark_clusters_threshold, "post.dark_clusters_threshold", err)) return false;
+    if (!ValidateColorChannel(out.defect_mask_color_r, "post.defect_mask_color_r", err)) return false;
+    if (!ValidateColorChannel(out.defect_mask_color_g, "post.defect_mask_color_g", err)) return false;
+    if (!ValidateColorChannel(out.defect_mask_color_b, "post.defect_mask_color_b", err)) return false;
+    if (out.defect_mask_alpha < 0.0f || out.defect_mask_alpha > 1.0f) {
+        err = "post.defect_mask_alpha must be in [0, 1]";
+        return false;
+    }
 
     if (!IsSupportedLogLevel(out.log_level)) {
         err = "log.level must be one of: error, warn, info, debug";
@@ -142,6 +157,11 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.patchcore_mask_area_threshold = GetFloatOr(ini, "patchcore", "mask_area_threshold", out.patchcore_mask_area_threshold);
     out.dark_clusters_threshold = GetFloatOr(ini, "post", "dark_clusters_threshold", out.dark_clusters_threshold);
     out.draw_box_details = GetBoolOr(ini, "post", "draw_box_details", out.draw_box_details);
+    out.draw_defect_mask = GetBoolOr(ini, "post", "draw_defect_mask", out.draw_defect_mask);
+    out.defect_mask_color_r = GetIntOr(ini, "post", "defect_mask_color_r", out.defect_mask_color_r);
+    out.defect_mask_color_g = GetIntOr(ini, "post", "defect_mask_color_g", out.defect_mask_color_g);
+    out.defect_mask_color_b = GetIntOr(ini, "post", "defect_mask_color_b", out.defect_mask_color_b);
+    out.defect_mask_alpha = GetFloatOr(ini, "post", "defect_mask_alpha", out.defect_mask_alpha);
     out.log_enabled = GetBoolOr(ini, "log", "enabled", out.log_enabled);
     out.log_level = GetStringOr(ini, "log", "level", out.log_level);
     out.log_to_stderr = GetBoolOr(ini, "log", "log_to_stderr", out.log_to_stderr);
