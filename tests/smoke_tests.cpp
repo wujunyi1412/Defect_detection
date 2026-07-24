@@ -22,6 +22,7 @@ int TestOverlayTextFit() {
 
 int TestConfigDefaults() {
     InspectionConfig::InspectionConfigData cfg;
+    if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
     if (AssertTrue(!cfg.draw_defect_mask, "draw_defect_mask default should be false")) return 1;
     if (AssertTrue(cfg.defect_mask_color_r == 255 &&

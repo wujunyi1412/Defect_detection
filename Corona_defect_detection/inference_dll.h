@@ -57,6 +57,8 @@ public:
 
     DLL_EXPORT void SetYoloNmsMode(bool class_aware);
 
+    DLL_EXPORT bool ShouldDrawDefectBox() const;
+
     DLL_EXPORT bool ShouldDrawBoxDetails() const;
 
     DLL_EXPORT MaskOverlayOptions GetMaskOverlayOptions() const;

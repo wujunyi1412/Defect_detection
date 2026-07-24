@@ -156,6 +156,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.patchcore_area_threshold = GetFloatOr(ini, "patchcore", "area_threshold", out.patchcore_area_threshold);
     out.patchcore_mask_area_threshold = GetFloatOr(ini, "patchcore", "mask_area_threshold", out.patchcore_mask_area_threshold);
     out.dark_clusters_threshold = GetFloatOr(ini, "post", "dark_clusters_threshold", out.dark_clusters_threshold);
+    out.draw_defect_box = GetBoolOr(ini, "post", "draw_defect_box", out.draw_defect_box);
     out.draw_box_details = GetBoolOr(ini, "post", "draw_box_details", out.draw_box_details);
     out.draw_defect_mask = GetBoolOr(ini, "post", "draw_defect_mask", out.draw_defect_mask);
     out.defect_mask_color_r = GetIntOr(ini, "post", "defect_mask_color_r", out.defect_mask_color_r);

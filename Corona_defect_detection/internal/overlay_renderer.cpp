@@ -159,6 +159,7 @@ bool RenderResultOverlayToHalconHandle(
     int32_t width,
     int32_t height,
     const InspectionDLL::InferenceResult& result,
+    bool draw_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
     int32_t o_imageHandle[1],
@@ -242,7 +243,9 @@ bool RenderResultOverlayToHalconHandle(
             r &= cv::Rect(0, 0, width, height);
             if (r.width <= 0 || r.height <= 0) continue;
 
-            cv::rectangle(vis, r, color, 2);
+            if (draw_defect_box) {
+                cv::rectangle(vis, r, color, 2);
+            }
 
             if (draw_box_details) {
                 std::string name = d.name;

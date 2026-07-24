@@ -29,6 +29,7 @@ public:
     float area_threshold_ = 1.4f;
     float mask_area_threshold_ = 0.01f;
     float dark_clusters_threshold_ = 0.8f;
+    bool draw_defect_box_ = true;
     bool draw_box_details_ = true;
     MaskOverlayOptions mask_overlay_options_;
     std::string last_error_;
@@ -97,6 +98,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->area_threshold_ = config.patchcore_area_threshold;
     pImpl->mask_area_threshold_ = config.patchcore_mask_area_threshold;
     pImpl->dark_clusters_threshold_ = config.dark_clusters_threshold;
+    pImpl->draw_defect_box_ = config.draw_defect_box;
     pImpl->draw_box_details_ = config.draw_box_details;
     pImpl->mask_overlay_options_.enabled = config.draw_defect_mask;
     pImpl->mask_overlay_options_.color_r = config.defect_mask_color_r;
@@ -258,6 +260,10 @@ void InspectionEngine::SetYoloNmsMode(bool class_aware) {
 // 是否绘制框详情
 bool InspectionEngine::ShouldDrawBoxDetails() const {
     return pImpl->draw_box_details_;
+}
+
+bool InspectionEngine::ShouldDrawDefectBox() const {
+    return pImpl->draw_defect_box_;
 }
 
 MaskOverlayOptions InspectionEngine::GetMaskOverlayOptions() const {

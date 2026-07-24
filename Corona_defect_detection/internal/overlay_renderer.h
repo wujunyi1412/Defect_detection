@@ -12,6 +12,7 @@ bool RenderResultOverlayToHalconHandle(
     int32_t width,
     int32_t height,
     const InspectionDLL::InferenceResult& result,
+    bool draw_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
     int32_t o_imageHandle[1],
