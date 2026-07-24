@@ -27,7 +27,8 @@ public:
         const std::string& onnx_model_path,
         const std::string& faiss_index_path,
         const std::string& metadata_path,
-        int ort_intra_threads = 4
+        int ort_intra_threads = 4,
+        int faiss_threads = 16
     );
 
     bool Infer(const cv::Mat& image, PatchCoreResult& result);

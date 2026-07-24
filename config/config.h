@@ -34,6 +34,7 @@ struct InspectionConfigData {
     float yolo_iou_threshold = 0.2f;
     bool yolo_nms_class_aware = false;
     int ort_intra_threads = 4;
+    int faiss_threads = 16;
     float patchcore_score_threshold = 1.4f;
     float patchcore_area_threshold = 1.4f;
     float patchcore_mask_area_threshold = 0.3f;

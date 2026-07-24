@@ -141,7 +141,12 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
         return false;
     }
 
-    if (!pImpl->patchcore_detector.Initialize(config.patchcore_model_path, config.faiss_index_path, config.metadata_path, config.ort_intra_threads)) {
+    if (!pImpl->patchcore_detector.Initialize(
+            config.patchcore_model_path,
+            config.faiss_index_path,
+            config.metadata_path,
+            config.ort_intra_threads,
+            config.faiss_threads)) {
         pImpl->SetLastError("failed to initialize PatchCore detector");
         return false;
     }

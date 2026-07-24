@@ -80,6 +80,10 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         err = "ort.intra_threads must be > 0";
         return false;
     }
+    if (out.faiss_threads <= 0) {
+        err = "faiss.threads must be > 0";
+        return false;
+    }
     if (out.yolo_iou_threshold < 0.0f || out.yolo_iou_threshold > 1.0f) {
         err = "yolo.iou_threshold must be in [0, 1]";
         return false;
@@ -151,6 +155,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.yolo_iou_threshold = GetFloatOr(ini, "yolo", "iou_threshold", out.yolo_iou_threshold);
     out.yolo_nms_class_aware = GetBoolOr(ini, "yolo", "nms_class_aware", out.yolo_nms_class_aware);
     out.ort_intra_threads = GetIntOr(ini, "ort", "intra_threads", out.ort_intra_threads);
+    out.faiss_threads = GetIntOr(ini, "faiss", "threads", out.faiss_threads);
 
     out.patchcore_score_threshold = GetFloatOr(ini, "patchcore", "score_threshold", out.patchcore_score_threshold);
     out.patchcore_area_threshold = GetFloatOr(ini, "patchcore", "area_threshold", out.patchcore_area_threshold);

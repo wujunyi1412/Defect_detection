@@ -1,16 +1,22 @@
 #include "patchcore_inference.h"
 
 #include <faiss/Index.h>
+#include <faiss/IndexFlat.h>
 #include <faiss/index_io.h>
+#include <openblas/cblas.h>
 #include "image_process.h"
+#include "logger.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstring>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <sstream>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -20,6 +26,16 @@
 #endif
 
 namespace PatchCore {
+namespace {
+
+using PatchCoreClock = std::chrono::steady_clock;
+
+double ElapsedMilliseconds(PatchCoreClock::time_point start,
+                           PatchCoreClock::time_point end) {
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+}  // namespace
 
 void PatchCoreDetector::FaissIndexDeleter::operator()(void* p) const noexcept {
     delete static_cast<faiss::Index*>(p);
@@ -578,7 +594,8 @@ bool PatchCoreDetector::Initialize(
     const std::string& onnx_model_path,
     const std::string& faiss_index_path,
     const std::string& metadata_path,
-    int ort_intra_threads) {
+    int ort_intra_threads,
+    int faiss_threads) {
     try {
         env_ = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "PatchCore");
 
@@ -643,6 +660,21 @@ bool PatchCoreDetector::Initialize(
             return false;
         }
 
+        openblas_set_num_threads(faiss_threads);
+        auto* flat_l2 = dynamic_cast<faiss::IndexFlatL2*>(index);
+
+        if (InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug)) {
+            std::ostringstream faiss_config;
+            faiss_config << "faiss_config"
+                         << " index_type=" << (flat_l2 ? "IndexFlatL2" : "other")
+                         << " dimensions=" << index->d
+                         << " vectors=" << index->ntotal
+                         << " requested_threads=" << faiss_threads
+                         << " active_openblas_threads=" << openblas_get_num_threads();
+            InspectionLogging::LogMessage(
+                InspectionLogging::LogLevel::Debug, faiss_config.str());
+        }
+
         return true;
     } catch (const std::exception& e) {
         std::cerr << "[PatchCore] Initialization failed: " << e.what() << std::endl;
@@ -657,21 +689,34 @@ bool PatchCoreDetector::Infer(const cv::Mat& image, PatchCoreResult& result) {
     }
 
     try {
+        const bool timing_enabled =
+            InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug);
+        const auto total_start = timing_enabled ? PatchCoreClock::now()
+                                                : PatchCoreClock::time_point{};
+
         std::vector<float> input_nchw;
         PatchCoreResult::MetaData meta{};
         PreprocessToNCHW(image, input_nchw, meta);
+        const auto preprocess_end = timing_enabled ? PatchCoreClock::now()
+                                                   : PatchCoreClock::time_point{};
 
         std::vector<Ort::Value> outputs;
         if (!RunBackbone(input_nchw, outputs)) return false;
+        const auto backbone_end = timing_enabled ? PatchCoreClock::now()
+                                                 : PatchCoreClock::time_point{};
 
         std::vector<float> embeddings;
         if (!ExtractEmbeddings(outputs, embeddings)) return false;
+        const auto embedding_end = timing_enabled ? PatchCoreClock::now()
+                                                  : PatchCoreClock::time_point{};
 
         const int ref_h = ref_patch_shape_.first;
         const int ref_w = ref_patch_shape_.second;
         const int P = ref_h * ref_w;
 
         std::vector<float> patch_scores = ComputeAnomalyScores(embeddings, P, target_embed_dim_);
+        const auto faiss_end = timing_enabled ? PatchCoreClock::now()
+                                              : PatchCoreClock::time_point{};
         if (patch_scores.size() != static_cast<size_t>(P)) {
             std::cerr << "[PatchCore] patch_scores size mismatch" << std::endl;
             return false;
@@ -684,6 +729,20 @@ bool PatchCoreDetector::Infer(const cv::Mat& image, PatchCoreResult& result) {
 
         cv::Mat score_map(ref_h, ref_w, CV_32F, patch_scores.data());
         result.patch_scores = score_map.clone();
+
+        if (timing_enabled) {
+            const auto finalize_end = PatchCoreClock::now();
+            std::ostringstream timing;
+            timing << std::fixed << std::setprecision(3)
+                   << "patchcore_timing_ms"
+                   << " preprocess=" << ElapsedMilliseconds(total_start, preprocess_end)
+                   << " backbone=" << ElapsedMilliseconds(preprocess_end, backbone_end)
+                   << " embedding=" << ElapsedMilliseconds(backbone_end, embedding_end)
+                   << " faiss=" << ElapsedMilliseconds(embedding_end, faiss_end)
+                   << " finalize=" << ElapsedMilliseconds(faiss_end, finalize_end)
+                   << " total=" << ElapsedMilliseconds(total_start, finalize_end);
+            InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, timing.str());
+        }
 
         return true;
     } catch (const std::exception& e) {
