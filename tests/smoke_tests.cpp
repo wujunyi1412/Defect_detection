@@ -1,7 +1,10 @@
 #include <iostream>
 #include <string>
 
+#include <opencv2/imgproc.hpp>
+
 #include "config.h"
+#include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
 
 namespace {
@@ -34,11 +37,45 @@ int TestConfigDefaults() {
     return 0;
 }
 
+int TestCombinedInferencePreprocessingMatchesLegacyPath() {
+    cv::Mat input(96, 128, CV_32FC1);
+    for (int y = 0; y < input.rows; ++y) {
+        float* row = input.ptr<float>(y);
+        for (int x = 0; x < input.cols; ++x) {
+            row[x] = static_cast<float>((x * 7 + y * 13) % 257);
+        }
+    }
+    input.rowRange(0, 10).setTo(0.0f);
+
+    const cv::Mat legacy_patchcore =
+        InspectionDLL::Internal::ProcessTIF32ForPatchcore(input);
+    const cv::Mat legacy_yolo =
+        InspectionDLL::Internal::ProcessForYolo(input);
+    const InspectionDLL::Internal::InferenceImages combined =
+        InspectionDLL::Internal::PrepareInferenceImages(input);
+
+    if (AssertTrue(cv::norm(legacy_patchcore, combined.patchcore_bgr, cv::NORM_INF) == 0.0,
+                   "combined PatchCore BGR preprocessing should match the legacy path")) return 1;
+    if (AssertTrue(cv::norm(legacy_yolo, combined.yolo_bgr, cv::NORM_INF) == 0.0,
+                   "combined YOLO BGR preprocessing should match the legacy path")) return 1;
+
+    cv::Mat legacy_patchcore_gray;
+    cv::Mat legacy_yolo_gray;
+    cv::cvtColor(legacy_patchcore, legacy_patchcore_gray, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(legacy_yolo, legacy_yolo_gray, cv::COLOR_BGR2GRAY);
+    if (AssertTrue(cv::norm(legacy_patchcore_gray, combined.patchcore_gray, cv::NORM_INF) == 0.0,
+                   "combined PatchCore gray preprocessing should match the legacy path")) return 1;
+    if (AssertTrue(cv::norm(legacy_yolo_gray, combined.yolo_gray, cv::NORM_INF) == 0.0,
+                   "combined YOLO gray preprocessing should match the legacy path")) return 1;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (TestOverlayTextFit()) return 1;
     if (TestConfigDefaults()) return 1;
+    if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;
     std::cout << "[PASS] smoke_tests" << std::endl;
     return 0;
 }

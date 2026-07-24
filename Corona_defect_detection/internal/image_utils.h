@@ -5,6 +5,14 @@
 
 namespace InspectionDLL::Internal {
 
+struct InferenceImages {
+    cv::Mat patchcore_bgr;
+    cv::Mat yolo_bgr;
+    cv::Mat patchcore_gray;
+    cv::Mat yolo_gray;
+};
+
+InferenceImages PrepareInferenceImages(const cv::Mat& img, int max_border = 100);
 cv::Mat ProcessTIF32ForPatchcore(const cv::Mat& img, int max_border = 100);
 cv::Mat ProcessForYolo(const cv::Mat& img);
 cv::Mat ConvertGrayToU8Normalized(const cv::Mat& gray);

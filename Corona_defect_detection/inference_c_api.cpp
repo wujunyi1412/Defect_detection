@@ -251,19 +251,21 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
 
     FillResult(tmp, out_result);
 
-    std::string overlay_err;
-    if (!InspectionOverlay::RenderResultOverlayToHalconHandle(
-            image_array,
-            width,
-            height,
-            tmp,
-            eng->ShouldDrawDefectBox(),
-            eng->ShouldDrawBoxDetails(),
-            eng->GetMaskOverlayOptions(),
-            o_imageHandle,
-            overlay_err)) {
-        CopyExceptionMessage(overlay_err.c_str(), o_message);
-        return INSPECTION_STATUS_OVERLAY_FAILED;
+    if (o_imageHandle) {
+        std::string overlay_err;
+        if (!InspectionOverlay::RenderResultOverlayToHalconHandle(
+                image_array,
+                width,
+                height,
+                tmp,
+                eng->ShouldDrawDefectBox(),
+                eng->ShouldDrawBoxDetails(),
+                eng->GetMaskOverlayOptions(),
+                o_imageHandle,
+                overlay_err)) {
+            CopyExceptionMessage(overlay_err.c_str(), o_message);
+            return INSPECTION_STATUS_OVERLAY_FAILED;
+        }
     }
 
     CopyExceptionMessage("inference success", o_message);
@@ -347,19 +349,21 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray_npy(
     }
 
     // 渲染推理结果到Halcon图像句柄
-    std::string overlay_err;
-    if (!InspectionOverlay::RenderResultOverlayToHalconHandle(
-            i_image_array,
-            i_width,
-            i_height,
-            tmp,
-            eng->ShouldDrawDefectBox(),
-            eng->ShouldDrawBoxDetails(),
-            eng->GetMaskOverlayOptions(),
-            o_imageHandle,
-            overlay_err)) {
-        CopyExceptionMessage(overlay_err.c_str(), o_message);
-        return INSPECTION_STATUS_OVERLAY_FAILED;
+    if (o_imageHandle) {
+        std::string overlay_err;
+        if (!InspectionOverlay::RenderResultOverlayToHalconHandle(
+                i_image_array,
+                i_width,
+                i_height,
+                tmp,
+                eng->ShouldDrawDefectBox(),
+                eng->ShouldDrawBoxDetails(),
+                eng->GetMaskOverlayOptions(),
+                o_imageHandle,
+                overlay_err)) {
+            CopyExceptionMessage(overlay_err.c_str(), o_message);
+            return INSPECTION_STATUS_OVERLAY_FAILED;
+        }
     }
 
     CopyExceptionMessage("inference success", o_message);

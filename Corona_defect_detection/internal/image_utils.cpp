@@ -19,6 +19,29 @@ bool IsContrastRatioValid(float contrast_ratio) {
     return std::isfinite(contrast_ratio) && contrast_ratio >= 0.0f;
 }
 
+InferenceImages PrepareInferenceImages(const cv::Mat& img, int max_border) {
+    InferenceImages result;
+
+    cv::Mat img_normalize = ImageProcess::ImageProcessor::Cvmat2Uint8(img);
+    result.yolo_bgr = ImageProcess::ImageProcessor::Cvmat2BGR(img_normalize);
+    if (result.yolo_bgr.empty()) return result;
+
+    if (result.yolo_bgr.channels() == 3) {
+        cv::cvtColor(result.yolo_bgr, result.yolo_gray, cv::COLOR_BGR2GRAY);
+    } else {
+        result.yolo_gray = result.yolo_bgr;
+    }
+
+    cv::Mat border_mask =
+        ImageProcess::ImageProcessor::GetSafeBorderMask(result.yolo_gray, max_border, 5);
+
+    result.patchcore_bgr = result.yolo_bgr.clone();
+    result.patchcore_gray = result.yolo_gray.clone();
+    result.patchcore_bgr.setTo(cv::Scalar(0, 0, 0), border_mask);
+    result.patchcore_gray.setTo(cv::Scalar(0), border_mask);
+    return result;
+}
+
 cv::Mat ProcessTIF32ForPatchcore(const cv::Mat& img, int max_border) {
     cv::Mat img_normalize = ImageProcess::ImageProcessor::Cvmat2Uint8(img);
     cv::Mat bgr = ImageProcess::ImageProcessor::Cvmat2BGR(img_normalize);

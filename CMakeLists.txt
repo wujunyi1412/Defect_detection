@@ -255,12 +255,15 @@ if(BUILD_SMOKE_TESTS)
         config/ini_parser.cpp
         logging/logger.cpp
         Corona_defect_detection/internal/overlay_renderer.cpp
+        Corona_defect_detection/internal/image_utils.cpp
+        image_process/image_process.cpp
     )
 
     target_include_directories(corona_smoke_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/config
         ${CMAKE_CURRENT_SOURCE_DIR}/logging
         ${CMAKE_CURRENT_SOURCE_DIR}/Corona_defect_detection
+        ${CMAKE_CURRENT_SOURCE_DIR}/image_process
         ${OPENCV_INCLUDE_DIR}
         ${HALCON_INCLUDE_DIR}
         ${HALCONCPP_INCLUDE_DIR}

@@ -281,7 +281,9 @@ bool PatchCoreDetector::LoadMetadata(const std::string& metadata_path) {
 
 void PatchCoreDetector::PreprocessToNCHW(
     const cv::Mat& img_bgr_like, std::vector<float>& nchw, PatchCoreResult::MetaData& meta) const {
-    cv::Mat img_u8 = ImageProcess::ImageProcessor::Cvmat2Uint8(img_bgr_like);
+    cv::Mat img_u8 = img_bgr_like.depth() == CV_8U
+                         ? img_bgr_like
+                         : ImageProcess::ImageProcessor::Cvmat2Uint8(img_bgr_like);
     cv::Mat img3 = ImageProcess::ImageProcessor::Cvmat2RGB(img_u8);
 
     int img_w = img3.cols;

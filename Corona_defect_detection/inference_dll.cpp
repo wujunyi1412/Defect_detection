@@ -145,54 +145,48 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
     }
 
     try {
-        cv::Mat img_patchcore = Internal::ProcessTIF32ForPatchcore(input_image);
-        if (img_patchcore.empty()) {
+        Internal::InferenceImages images = Internal::PrepareInferenceImages(input_image);
+        if (images.patchcore_bgr.empty() || images.patchcore_gray.empty()) {
             pImpl->SetLastError("image preprocessing failed for patchcore");
             return false;
         }
 
-        cv::Mat img_yolo = Internal::ProcessForYolo(input_image);
-        if (img_yolo.empty()) {
+        if (images.yolo_bgr.empty() || images.yolo_gray.empty()) {
             pImpl->SetLastError("image preprocessing failed for yolo");
             return false;
         }
 
-        const cv::Size img_shape = img_patchcore.size();
+        const cv::Size img_shape = images.patchcore_bgr.size();
 
         std::vector<YOLO::Detection> yolo_detections;
-        const bool yolo_success = pImpl->yolo_detector.Infer(img_yolo, yolo_detections);
+        const bool yolo_success = pImpl->yolo_detector.Infer(images.yolo_bgr, yolo_detections);
 
         PatchCore::PatchCoreResult patchcore_result;
-        const bool patchcore_success = pImpl->patchcore_detector.Infer(img_patchcore, patchcore_result);
+        const bool patchcore_success = pImpl->patchcore_detector.Infer(images.patchcore_bgr, patchcore_result);
 
         if (!yolo_success && !patchcore_success) {
             pImpl->SetLastError("both models failed");
             return false;
         }
 
-        cv::Mat gray_patchcore;
-        cv::Mat gray_yolo;
-        cv::cvtColor(img_patchcore, gray_patchcore, cv::COLOR_BGR2GRAY);
-        cv::cvtColor(img_yolo, gray_yolo, cv::COLOR_BGR2GRAY);
-
         Internal::PatchCoreDerived pc = Internal::AnalyzePatchCore(
             patchcore_result,
             img_shape,
-            gray_patchcore,
+            images.patchcore_gray,
             pImpl->score_threshold_,
             pImpl->area_threshold_,
             pImpl->mask_area_threshold_);
         Internal::YoloDerived yolo = Internal::AnalyzeYolo(
             yolo_detections,
-            gray_yolo,
+            images.yolo_gray,
             pImpl->dark_clusters_threshold_);
 
         Internal::ComposeOutputWithDefectFilter(
             pc,
             yolo,
             img_shape,
-            gray_patchcore,
-            gray_yolo,
+            images.patchcore_gray,
+            images.yolo_gray,
             output,
             pImpl->BuildComposeContext());
         InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, "image processed successfully");
