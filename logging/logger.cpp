@@ -10,7 +10,7 @@ std::mutex g_logger_mutex;
 LoggerConfig g_logger_config;
 
 // 判断是否应该记录日志
-bool ShouldLog(LogLevel level, const LoggerConfig& config) {
+bool ShouldLogUnlocked(LogLevel level, const LoggerConfig& config) {
     return config.enabled && static_cast<int>(level) <= static_cast<int>(config.min_level);
 }
 
@@ -28,10 +28,15 @@ LoggerConfig GetLoggerConfig() {
     return g_logger_config;
 }
 
+bool IsLogEnabled(LogLevel level) {
+    std::lock_guard<std::mutex> lock(g_logger_mutex);
+    return ShouldLogUnlocked(level, g_logger_config);
+}
+
 // 根据日志级别打印/记录日志消息
 void LogMessage(LogLevel level, const std::string& message) {
     std::lock_guard<std::mutex> lock(g_logger_mutex);
-    if (!ShouldLog(level, g_logger_config)) {
+    if (!ShouldLogUnlocked(level, g_logger_config)) {
         return;
     }
 

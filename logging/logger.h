@@ -22,6 +22,7 @@ struct LoggerConfig {
 
 void SetLoggerConfig(const LoggerConfig& config);
 LoggerConfig GetLoggerConfig();
+bool IsLogEnabled(LogLevel level);
 
 void LogMessage(LogLevel level, const std::string& message);
 const char* ToString(LogLevel level);

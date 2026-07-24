@@ -7,6 +7,7 @@
 #include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
 #include "internal/yolo_postprocess.h"
+#include "logger.h"
 
 namespace {
 
@@ -35,6 +36,25 @@ int TestConfigDefaults() {
                    "defect mask default color should be red")) return 1;
     if (AssertTrue(cfg.defect_mask_alpha == 0.35f, "defect_mask_alpha default should be 0.35")) return 1;
     if (AssertTrue(cfg.log_enabled, "log_enabled default should be true")) return 1;
+    return 0;
+}
+
+int TestLoggerLevelQuery() {
+    const InspectionLogging::LoggerConfig original = InspectionLogging::GetLoggerConfig();
+    InspectionLogging::LoggerConfig config;
+    config.enabled = true;
+    config.min_level = InspectionLogging::LogLevel::Info;
+    config.log_to_stderr = false;
+    InspectionLogging::SetLoggerConfig(config);
+
+    const bool info_enabled =
+        InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Info);
+    const bool debug_enabled =
+        InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug);
+    InspectionLogging::SetLoggerConfig(original);
+
+    if (AssertTrue(info_enabled, "info logging should be enabled at info level")) return 1;
+    if (AssertTrue(!debug_enabled, "debug logging should be disabled at info level")) return 1;
     return 0;
 }
 
@@ -101,6 +121,7 @@ int TestYoloPostprocessReusesBinaryMask() {
 int main() {
     if (TestOverlayTextFit()) return 1;
     if (TestConfigDefaults()) return 1;
+    if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;
     if (TestYoloPostprocessReusesBinaryMask()) return 1;
     std::cout << "[PASS] smoke_tests" << std::endl;

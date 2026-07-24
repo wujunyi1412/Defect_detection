@@ -1,7 +1,11 @@
 #include "inference_dll.h"
 
+#include <chrono>
 #include <exception>
+#include <future>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 
 #include <opencv2/opencv.hpp>
 
@@ -15,6 +19,22 @@
 #include "internal/yolo_postprocess.h"
 
 namespace InspectionDLL {
+
+namespace {
+
+using InferenceClock = std::chrono::steady_clock;
+
+double ElapsedMilliseconds(InferenceClock::time_point start,
+                           InferenceClock::time_point end) {
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+struct ModelRunResult {
+    bool success = false;
+    double elapsed_ms = 0.0;
+};
+
+}  // namespace
 
 // InspectionEngine 实现类
 class InspectionEngine::Impl {
@@ -145,7 +165,14 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
     }
 
     try {
+        const bool timing_enabled =
+            InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug);
+        const auto total_start = timing_enabled ? InferenceClock::now()
+                                                : InferenceClock::time_point{};
+
         Internal::InferenceImages images = Internal::PrepareInferenceImages(input_image);
+        const auto preprocess_end = timing_enabled ? InferenceClock::now()
+                                                   : InferenceClock::time_point{};
         if (images.patchcore_bgr.empty() || images.patchcore_gray.empty()) {
             pImpl->SetLastError("image preprocessing failed for patchcore");
             return false;
@@ -158,11 +185,32 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
 
         const cv::Size img_shape = images.patchcore_bgr.size();
 
+        const auto models_start = timing_enabled ? InferenceClock::now()
+                                                 : InferenceClock::time_point{};
         std::vector<YOLO::Detection> yolo_detections;
-        const bool yolo_success = pImpl->yolo_detector.Infer(images.yolo_bgr, yolo_detections);
+        auto yolo_future = std::async(
+            std::launch::async,
+            [&]() {
+                const auto start = timing_enabled ? InferenceClock::now()
+                                                  : InferenceClock::time_point{};
+                ModelRunResult run;
+                run.success = pImpl->yolo_detector.Infer(images.yolo_bgr, yolo_detections);
+                if (timing_enabled) {
+                    run.elapsed_ms = ElapsedMilliseconds(start, InferenceClock::now());
+                }
+                return run;
+            });
 
+        const auto patchcore_start = timing_enabled ? InferenceClock::now()
+                                                    : InferenceClock::time_point{};
         PatchCore::PatchCoreResult patchcore_result;
         const bool patchcore_success = pImpl->patchcore_detector.Infer(images.patchcore_bgr, patchcore_result);
+        const auto patchcore_end = timing_enabled ? InferenceClock::now()
+                                                  : InferenceClock::time_point{};
+        const ModelRunResult yolo_run = yolo_future.get();
+        const bool yolo_success = yolo_run.success;
+        const auto models_end = timing_enabled ? InferenceClock::now()
+                                               : InferenceClock::time_point{};
 
         if (!yolo_success && !patchcore_success) {
             pImpl->SetLastError("both models failed");
@@ -176,10 +224,14 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
             pImpl->score_threshold_,
             pImpl->area_threshold_,
             pImpl->mask_area_threshold_);
+        const auto patchcore_post_end = timing_enabled ? InferenceClock::now()
+                                                       : InferenceClock::time_point{};
         Internal::YoloDerived yolo = Internal::AnalyzeYolo(
             yolo_detections,
             images.yolo_gray,
             pImpl->dark_clusters_threshold_);
+        const auto yolo_post_end = timing_enabled ? InferenceClock::now()
+                                                  : InferenceClock::time_point{};
 
         Internal::ComposeOutputWithDefectFilter(
             pc,
@@ -189,6 +241,22 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
             images.yolo_gray,
             output,
             pImpl->BuildComposeContext());
+        const auto compose_end = timing_enabled ? InferenceClock::now()
+                                                : InferenceClock::time_point{};
+        if (timing_enabled) {
+            std::ostringstream timing;
+            timing << std::fixed << std::setprecision(3)
+                   << "timing_ms"
+                   << " preprocess=" << ElapsedMilliseconds(total_start, preprocess_end)
+                   << " yolo_infer=" << yolo_run.elapsed_ms
+                   << " patchcore_infer=" << ElapsedMilliseconds(patchcore_start, patchcore_end)
+                   << " models_wall=" << ElapsedMilliseconds(models_start, models_end)
+                   << " patchcore_post=" << ElapsedMilliseconds(models_end, patchcore_post_end)
+                   << " yolo_post=" << ElapsedMilliseconds(patchcore_post_end, yolo_post_end)
+                   << " compose=" << ElapsedMilliseconds(yolo_post_end, compose_end)
+                   << " total=" << ElapsedMilliseconds(total_start, compose_end);
+            InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, timing.str());
+        }
         InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, "image processed successfully");
         return true;
     } catch (const std::exception& e) {
