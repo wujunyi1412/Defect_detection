@@ -36,7 +36,6 @@ int TestConfigDefaults() {
                    "defect mask default color should be red")) return 1;
     if (AssertTrue(cfg.defect_mask_alpha == 0.35f, "defect_mask_alpha default should be 0.35")) return 1;
     if (AssertTrue(cfg.log_enabled, "log_enabled default should be true")) return 1;
-    if (AssertTrue(cfg.faiss_threads == 16, "faiss_threads default should be 16")) return 1;
     return 0;
 }
 

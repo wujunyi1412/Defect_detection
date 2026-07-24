@@ -150,7 +150,6 @@ target_include_directories(Corona_defect_detection PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/image_process         
     ${OPENCV_INCLUDE_DIR}                
     ${ONNXRUNTIME_ROOT}/include         
-    ${OPENBLAS_ROOT}/include
     ${HALCON_INCLUDE_DIR}
     ${HALCONCPP_INCLUDE_DIR}
 )
@@ -174,10 +173,6 @@ if(faiss_FOUND OR FAISS_ROOT)
     else()
         target_link_libraries(Corona_defect_detection faiss)
     endif()
-endif()
-
-if(WIN32 AND EXISTS "${OPENBLAS_ROOT}/lib/openblas.lib")
-    target_link_libraries(Corona_defect_detection "${OPENBLAS_ROOT}/lib/openblas.lib")
 endif()
 
 
