@@ -342,6 +342,7 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     detail.w = static_cast<float>(refined.width);
     detail.h = static_cast<float>(refined.height);
     detail.area = refined_area;
+    detail.mask = refined_mask.clone();
     if (IsContrastRatioValid(refined_contrast)) detail.contrast = refined_contrast;
     return true;
 }
