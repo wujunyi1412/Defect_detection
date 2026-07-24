@@ -587,7 +587,6 @@ bool PatchCoreDetector::Initialize(
         Ort::SessionOptions session_options;
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         session_options.SetIntraOpNumThreads(ort_intra_threads);
-        session_options.DisableMemPattern();
 
 #ifdef _WIN32
         const int path_size = MultiByteToWideChar(CP_UTF8, 0, onnx_model_path.c_str(), -1, nullptr, 0);

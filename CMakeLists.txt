@@ -256,6 +256,8 @@ if(BUILD_SMOKE_TESTS)
         logging/logger.cpp
         Corona_defect_detection/internal/overlay_renderer.cpp
         Corona_defect_detection/internal/image_utils.cpp
+        Corona_defect_detection/internal/image_utils_adaptive.cpp
+        Corona_defect_detection/internal/yolo_postprocess.cpp
         image_process/image_process.cpp
     )
 

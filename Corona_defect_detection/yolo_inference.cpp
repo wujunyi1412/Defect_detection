@@ -423,8 +423,7 @@ void YOLOv8Segmentor::Postprocess(
 
         cv::Mat mask_orig_f;
         cv::resize(mask_unpad, mask_orig_f, original_img.size(), 0, 0, cv::INTER_LINEAR);
-        cv::Mat mask_bin = mask_orig_f > 0.25f;
-        mask_bin.convertTo(det.mask, CV_8U, 255.0);
+        det.mask = mask_orig_f > 0.25f;
         detections.push_back(det);
     }
 }

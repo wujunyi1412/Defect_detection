@@ -6,6 +6,7 @@
 #include "config.h"
 #include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
+#include "internal/yolo_postprocess.h"
 
 namespace {
 
@@ -70,12 +71,38 @@ int TestCombinedInferencePreprocessingMatchesLegacyPath() {
     return 0;
 }
 
+int TestYoloPostprocessReusesBinaryMask() {
+    cv::Mat gray(80, 80, CV_8U, cv::Scalar(100));
+    gray(cv::Rect(20, 20, 20, 20)).setTo(50);
+
+    YOLO::Detection detection{};
+    detection.class_id = 0;
+    detection.confidence = 0.9f;
+    detection.x1 = 20.0f;
+    detection.y1 = 20.0f;
+    detection.x2 = 40.0f;
+    detection.y2 = 40.0f;
+    detection.mask = cv::Mat::zeros(gray.size(), CV_8U);
+    detection.mask(cv::Rect(20, 20, 20, 20)).setTo(255);
+
+    const InspectionDLL::Internal::YoloDerived result =
+        InspectionDLL::Internal::AnalyzeYolo({detection}, gray, 0.8f);
+    if (AssertTrue(result.details.size() == 1, "YOLO postprocess should keep the detection")) return 1;
+    if (AssertTrue(result.details[0].area == 400, "YOLO mask area should remain unchanged")) return 1;
+    if (AssertTrue(result.details[0].mask.data == detection.mask.data,
+                   "YOLO postprocess should share the existing binary mask")) return 1;
+    if (AssertTrue(cv::norm(result.details[0].mask, detection.mask, cv::NORM_INF) == 0.0,
+                   "shared YOLO mask contents should remain unchanged")) return 1;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (TestOverlayTextFit()) return 1;
     if (TestConfigDefaults()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;
+    if (TestYoloPostprocessReusesBinaryMask()) return 1;
     std::cout << "[PASS] smoke_tests" << std::endl;
     return 0;
 }

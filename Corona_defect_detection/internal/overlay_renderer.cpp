@@ -182,8 +182,8 @@ bool RenderResultOverlayToHalconHandle(
 
         cv::Mat img_u8;
         if (max_val > min_val + 1e-12) {
-            cv::Mat norm = (img32 - min_val) / (max_val - min_val);
-            norm.convertTo(img_u8, CV_8U, 255.0);
+            const double scale = 255.0 / (max_val - min_val);
+            img32.convertTo(img_u8, CV_8U, scale, -min_val * scale);
         } else {
             img_u8 = cv::Mat::zeros(img32.size(), CV_8U);
         }

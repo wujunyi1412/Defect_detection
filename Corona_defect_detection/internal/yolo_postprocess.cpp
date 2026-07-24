@@ -48,11 +48,8 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
         detail.w = det.x2 - det.x1;
         detail.h = det.y2 - det.y1;
 
-        cv::Mat mask_uint8;
-        det.mask.convertTo(mask_uint8, CV_8U);
-        cv::threshold(mask_uint8, mask_uint8, 0, 255, cv::THRESH_BINARY);
-        detail.mask = mask_uint8.clone();
-        detail.area = static_cast<int>(cv::countNonZero(mask_uint8));
+        const cv::Mat& mask_uint8 = det.mask;
+        detail.mask = mask_uint8;
 
         const int W = gray_yolo.cols;
         const int H = gray_yolo.rows;
@@ -75,7 +72,6 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
         } else {
             cv::Mat resized_mask;
             cv::resize(mask_uint8, resized_mask, cv::Size(bbox_w, bbox_h), 0, 0, cv::INTER_NEAREST);
-            cv::threshold(resized_mask, resized_mask, 0, 255, cv::THRESH_BINARY);
             mask_area_in_bbox = cv::countNonZero(resized_mask);
         }
 
