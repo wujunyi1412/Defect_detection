@@ -159,6 +159,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.draw_defect_box = GetBoolOr(ini, "post", "draw_defect_box", out.draw_defect_box);
     out.draw_box_details = GetBoolOr(ini, "post", "draw_box_details", out.draw_box_details);
     out.draw_defect_mask = GetBoolOr(ini, "post", "draw_defect_mask", out.draw_defect_mask);
+    out.concat_original_image = GetBoolOr(ini, "post", "concat_original_image", out.concat_original_image);
     out.defect_mask_color_r = GetIntOr(ini, "post", "defect_mask_color_r", out.defect_mask_color_r);
     out.defect_mask_color_g = GetIntOr(ini, "post", "defect_mask_color_g", out.defect_mask_color_g);
     out.defect_mask_color_b = GetIntOr(ini, "post", "defect_mask_color_b", out.defect_mask_color_b);

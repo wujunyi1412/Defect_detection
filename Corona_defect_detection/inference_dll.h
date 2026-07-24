@@ -61,6 +61,8 @@ public:
 
     DLL_EXPORT bool ShouldDrawBoxDetails() const;
 
+    DLL_EXPORT bool ShouldConcatOriginalImage() const;
+
     DLL_EXPORT MaskOverlayOptions GetMaskOverlayOptions() const;
 
     DLL_EXPORT const std::string& GetLastError() const;

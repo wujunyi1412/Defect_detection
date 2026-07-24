@@ -261,6 +261,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
                 eng->ShouldDrawDefectBox(),
                 eng->ShouldDrawBoxDetails(),
                 eng->GetMaskOverlayOptions(),
+                eng->ShouldConcatOriginalImage(),
                 o_imageHandle,
                 overlay_err)) {
             CopyExceptionMessage(overlay_err.c_str(), o_message);
@@ -359,6 +360,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray_npy(
                 eng->ShouldDrawDefectBox(),
                 eng->ShouldDrawBoxDetails(),
                 eng->GetMaskOverlayOptions(),
+                eng->ShouldConcatOriginalImage(),
                 o_imageHandle,
                 overlay_err)) {
             CopyExceptionMessage(overlay_err.c_str(), o_message);

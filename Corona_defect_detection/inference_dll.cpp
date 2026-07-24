@@ -51,6 +51,7 @@ public:
     float dark_clusters_threshold_ = 0.8f;
     bool draw_defect_box_ = true;
     bool draw_box_details_ = true;
+    bool concat_original_image_ = false;
     MaskOverlayOptions mask_overlay_options_;
     std::string last_error_;
 
@@ -120,6 +121,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->dark_clusters_threshold_ = config.dark_clusters_threshold;
     pImpl->draw_defect_box_ = config.draw_defect_box;
     pImpl->draw_box_details_ = config.draw_box_details;
+    pImpl->concat_original_image_ = config.concat_original_image;
     pImpl->mask_overlay_options_.enabled = config.draw_defect_mask;
     pImpl->mask_overlay_options_.color_r = config.defect_mask_color_r;
     pImpl->mask_overlay_options_.color_g = config.defect_mask_color_g;
@@ -326,6 +328,10 @@ bool InspectionEngine::ShouldDrawBoxDetails() const {
 
 bool InspectionEngine::ShouldDrawDefectBox() const {
     return pImpl->draw_defect_box_;
+}
+
+bool InspectionEngine::ShouldConcatOriginalImage() const {
+    return pImpl->concat_original_image_;
 }
 
 MaskOverlayOptions InspectionEngine::GetMaskOverlayOptions() const {

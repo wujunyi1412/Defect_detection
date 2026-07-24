@@ -15,6 +15,7 @@ bool RenderResultOverlayToHalconHandle(
     bool draw_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
+    bool concat_original_image,
     int32_t o_imageHandle[1],
     std::string& err);
 

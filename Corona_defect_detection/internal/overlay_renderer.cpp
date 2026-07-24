@@ -5,6 +5,7 @@
 #include <cmath>
 #include <exception>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -164,6 +165,7 @@ bool RenderResultOverlayToHalconHandle(
     bool draw_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
+    bool concat_original_image,
     int32_t o_imageHandle[1],
     std::string& err) {
     if (!image_array) {
@@ -172,6 +174,10 @@ bool RenderResultOverlayToHalconHandle(
     }
     if (width <= 0 || height <= 0) {
         err = "overlay input width or height is invalid";
+        return false;
+    }
+    if (concat_original_image && width > std::numeric_limits<int>::max() / 2) {
+        err = "concatenated overlay width is out of bounds";
         return false;
     }
 
@@ -195,7 +201,15 @@ bool RenderResultOverlayToHalconHandle(
         }
 
         cv::Mat vis;
-        cv::cvtColor(img_u8, vis, cv::COLOR_GRAY2BGR);
+        cv::Mat concatenated;
+        if (concat_original_image) {
+            concatenated.create(height, width * 2, CV_8UC3);
+            vis = concatenated(cv::Rect(width, 0, width, height));
+            cv::cvtColor(img_u8, vis, cv::COLOR_GRAY2BGR);
+            vis.copyTo(concatenated(cv::Rect(0, 0, width, height)));
+        } else {
+            cv::cvtColor(img_u8, vis, cv::COLOR_GRAY2BGR);
+        }
 
         const cv::Scalar color_ng(0, 51, 255);
         const cv::Scalar color_ok(0, 255, 0);
@@ -288,19 +302,20 @@ bool RenderResultOverlayToHalconHandle(
             return true;
         }
 
-        if (vis.empty()) {
+        const cv::Mat& rendered_image = concat_original_image ? concatenated : vis;
+        if (rendered_image.empty()) {
             err = "overlay image is empty";
             return false;
         }
-        if (vis.type() != CV_8UC3) {
+        if (rendered_image.type() != CV_8UC3) {
             err = "overlay image must be CV_8UC3";
             return false;
         }
 
         cv::Mat continuous_image;
-        const cv::Mat* image_to_serialize = &vis;
-        if (!vis.isContinuous()) {
-            continuous_image = vis.clone();
+        const cv::Mat* image_to_serialize = &rendered_image;
+        if (!rendered_image.isContinuous()) {
+            continuous_image = rendered_image.clone();
             image_to_serialize = &continuous_image;
         }
 

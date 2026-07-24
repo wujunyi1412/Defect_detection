@@ -41,6 +41,7 @@ struct InspectionConfigData {
     bool draw_defect_box = true;
     bool draw_box_details = true;
     bool draw_defect_mask = false;
+    bool concat_original_image = false;
     int defect_mask_color_r = 255;
     int defect_mask_color_g = 0;
     int defect_mask_color_b = 0;

@@ -30,6 +30,7 @@ int TestConfigDefaults() {
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
     if (AssertTrue(!cfg.draw_defect_mask, "draw_defect_mask default should be false")) return 1;
+    if (AssertTrue(!cfg.concat_original_image, "concat_original_image default should be false")) return 1;
     if (AssertTrue(cfg.defect_mask_color_r == 255 &&
                    cfg.defect_mask_color_g == 0 &&
                    cfg.defect_mask_color_b == 0,
