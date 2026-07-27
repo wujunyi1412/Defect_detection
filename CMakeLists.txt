@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Corona_defect_detection VERSION 1.0.0 LANGUAGES CXX)
+project(Corona_defect_detection VERSION 1.0.1 LANGUAGES CXX)
 
 # set(CORONA_COMPANY_NAME "Corona Defect Detection" CACHE STRING "DLL company name")
 set(CORONA_FILE_DESCRIPTION "Corona Defect Detection Inference Library" CACHE STRING "DLL file description")
