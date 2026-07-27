@@ -1,7 +1,6 @@
 #include "overlay_renderer.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <exception>
 #include <iomanip>
@@ -13,6 +12,7 @@
 
 #include "HalconCpp.h"
 #include "logger.h"
+#include "performance_timer.h"
 
 #ifdef _WIN32
 #ifdef min
@@ -184,8 +184,7 @@ bool RenderResultOverlayToHalconHandle(
     try {
         const bool timing_enabled =
             InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug);
-        const auto timing_start = timing_enabled ? std::chrono::steady_clock::now()
-                                                 : std::chrono::steady_clock::time_point{};
+        InspectionProfiling::PerformanceTimer timing_timer(timing_enabled);
         cv::Mat img32(height, width, CV_32FC1, const_cast<float*>(image_array));
 
         double min_val = 0.0;
@@ -340,13 +339,11 @@ bool RenderResultOverlayToHalconHandle(
         o_imageHandle[0] = static_cast<int32_t>(hv_serialized[0].L());
         hv_serialized.Clear();
         if (timing_enabled) {
-            const auto timing_end = std::chrono::steady_clock::now();
-            const double elapsed_ms =
-                std::chrono::duration<double, std::milli>(timing_end - timing_start).count();
-            std::ostringstream timing;
-            timing << std::fixed << std::setprecision(3)
-                   << "timing_ms overlay_and_halcon=" << elapsed_ms;
-            InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, timing.str());
+            InspectionLogging::LogMessage(
+                InspectionLogging::LogLevel::Debug,
+                InspectionProfiling::FormatTimingLog({
+                    {"overlay_and_halcon", timing_timer.ElapsedMilliseconds()},
+                }));
         }
         return true;
     } catch (const std::exception& e) {

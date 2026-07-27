@@ -98,6 +98,7 @@ set(DLL_SOURCES
     config/config.cpp
     config/ini_parser.cpp
     logging/logger.cpp
+    profiling/performance_timer.cpp
     Corona_defect_detection/inference_c_api.cpp
     Corona_defect_detection/inference_dll.cpp                    
     Corona_defect_detection/internal/overlay_renderer.cpp
@@ -121,6 +122,7 @@ set(DLL_HEADERS
     config/config.h
     config/ini_parser.h
     logging/logger.h
+    profiling/performance_timer.h
     Corona_defect_detection/inference_dll.h
     Corona_defect_detection/inference_c_api.h
     Corona_defect_detection/internal/overlay_renderer.h
@@ -145,6 +147,7 @@ target_compile_definitions(Corona_defect_detection PRIVATE INSPECTION_CAPI_EXPOR
 target_include_directories(Corona_defect_detection PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/config
     ${CMAKE_CURRENT_SOURCE_DIR}/logging
+    ${CMAKE_CURRENT_SOURCE_DIR}/profiling
     ${CMAKE_CURRENT_SOURCE_DIR}/Corona_defect_detection 
     ${CMAKE_CURRENT_SOURCE_DIR}/Corona_defect_detection/internal
     ${CMAKE_CURRENT_SOURCE_DIR}/image_process         
@@ -254,6 +257,7 @@ if(BUILD_SMOKE_TESTS)
         config/config.cpp
         config/ini_parser.cpp
         logging/logger.cpp
+        profiling/performance_timer.cpp
         Corona_defect_detection/internal/overlay_renderer.cpp
         Corona_defect_detection/internal/image_utils.cpp
         Corona_defect_detection/internal/image_utils_adaptive.cpp
@@ -264,6 +268,7 @@ if(BUILD_SMOKE_TESTS)
     target_include_directories(corona_smoke_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/config
         ${CMAKE_CURRENT_SOURCE_DIR}/logging
+        ${CMAKE_CURRENT_SOURCE_DIR}/profiling
         ${CMAKE_CURRENT_SOURCE_DIR}/Corona_defect_detection
         ${CMAKE_CURRENT_SOURCE_DIR}/image_process
         ${OPENCV_INCLUDE_DIR}

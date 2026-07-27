@@ -1,17 +1,15 @@
 #include "inference_dll.h"
 
-#include <chrono>
 #include <exception>
 #include <future>
-#include <iomanip>
 #include <memory>
-#include <sstream>
 
 #include <opencv2/opencv.hpp>
 
 #include "config.h"
 #include "logger.h"
 #include "patchcore_inference.h"
+#include "performance_timer.h"
 #include "yolo_inference.h"
 #include "internal/image_utils.h"
 #include "internal/patchcore_postprocess.h"
@@ -21,13 +19,6 @@
 namespace InspectionDLL {
 
 namespace {
-
-using InferenceClock = std::chrono::steady_clock;
-
-double ElapsedMilliseconds(InferenceClock::time_point start,
-                           InferenceClock::time_point end) {
-    return std::chrono::duration<double, std::milli>(end - start).count();
-}
 
 struct ModelRunResult {
     bool success = false;
@@ -169,12 +160,11 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
     try {
         const bool timing_enabled =
             InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug);
-        const auto total_start = timing_enabled ? InferenceClock::now()
-                                                : InferenceClock::time_point{};
+        InspectionProfiling::PerformanceTimer total_timer(timing_enabled);
+        InspectionProfiling::InferenceTiming timing;
 
         Internal::InferenceImages images = Internal::PrepareInferenceImages(input_image);
-        const auto preprocess_end = timing_enabled ? InferenceClock::now()
-                                                   : InferenceClock::time_point{};
+        timing.preprocess_ms = total_timer.ElapsedMilliseconds();
         if (images.patchcore_bgr.empty() || images.patchcore_gray.empty()) {
             pImpl->SetLastError("image preprocessing failed for patchcore");
             return false;
@@ -187,38 +177,33 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
 
         const cv::Size img_shape = images.patchcore_bgr.size();
 
-        const auto models_start = timing_enabled ? InferenceClock::now()
-                                                 : InferenceClock::time_point{};
+        InspectionProfiling::PerformanceTimer models_timer(timing_enabled);
         std::vector<YOLO::Detection> yolo_detections;
         auto yolo_future = std::async(
             std::launch::async,
             [&]() {
-                const auto start = timing_enabled ? InferenceClock::now()
-                                                  : InferenceClock::time_point{};
+                InspectionProfiling::PerformanceTimer timer(timing_enabled);
                 ModelRunResult run;
                 run.success = pImpl->yolo_detector.Infer(images.yolo_bgr, yolo_detections);
-                if (timing_enabled) {
-                    run.elapsed_ms = ElapsedMilliseconds(start, InferenceClock::now());
-                }
+                run.elapsed_ms = timer.ElapsedMilliseconds();
                 return run;
             });
 
-        const auto patchcore_start = timing_enabled ? InferenceClock::now()
-                                                    : InferenceClock::time_point{};
+        InspectionProfiling::PerformanceTimer patchcore_timer(timing_enabled);
         PatchCore::PatchCoreResult patchcore_result;
         const bool patchcore_success = pImpl->patchcore_detector.Infer(images.patchcore_bgr, patchcore_result);
-        const auto patchcore_end = timing_enabled ? InferenceClock::now()
-                                                  : InferenceClock::time_point{};
+        timing.patchcore_infer_ms = patchcore_timer.ElapsedMilliseconds();
         const ModelRunResult yolo_run = yolo_future.get();
         const bool yolo_success = yolo_run.success;
-        const auto models_end = timing_enabled ? InferenceClock::now()
-                                               : InferenceClock::time_point{};
+        timing.yolo_infer_ms = yolo_run.elapsed_ms;
+        timing.models_wall_ms = models_timer.ElapsedMilliseconds();
 
         if (!yolo_success && !patchcore_success) {
             pImpl->SetLastError("both models failed");
             return false;
         }
 
+        InspectionProfiling::PerformanceTimer postprocess_timer(timing_enabled);
         Internal::PatchCoreDerived pc = Internal::AnalyzePatchCore(
             patchcore_result,
             img_shape,
@@ -226,14 +211,12 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
             pImpl->score_threshold_,
             pImpl->area_threshold_,
             pImpl->mask_area_threshold_);
-        const auto patchcore_post_end = timing_enabled ? InferenceClock::now()
-                                                       : InferenceClock::time_point{};
+        timing.patchcore_post_ms = postprocess_timer.RestartMilliseconds();
         Internal::YoloDerived yolo = Internal::AnalyzeYolo(
             yolo_detections,
             images.yolo_gray,
             pImpl->dark_clusters_threshold_);
-        const auto yolo_post_end = timing_enabled ? InferenceClock::now()
-                                                  : InferenceClock::time_point{};
+        timing.yolo_post_ms = postprocess_timer.RestartMilliseconds();
 
         Internal::ComposeOutputWithDefectFilter(
             pc,
@@ -243,21 +226,12 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
             images.yolo_gray,
             output,
             pImpl->BuildComposeContext());
-        const auto compose_end = timing_enabled ? InferenceClock::now()
-                                                : InferenceClock::time_point{};
+        timing.compose_ms = postprocess_timer.ElapsedMilliseconds();
+        timing.total_ms = total_timer.ElapsedMilliseconds();
         if (timing_enabled) {
-            std::ostringstream timing;
-            timing << std::fixed << std::setprecision(3)
-                   << "timing_ms"
-                   << " preprocess=" << ElapsedMilliseconds(total_start, preprocess_end)
-                   << " yolo_infer=" << yolo_run.elapsed_ms
-                   << " patchcore_infer=" << ElapsedMilliseconds(patchcore_start, patchcore_end)
-                   << " models_wall=" << ElapsedMilliseconds(models_start, models_end)
-                   << " patchcore_post=" << ElapsedMilliseconds(models_end, patchcore_post_end)
-                   << " yolo_post=" << ElapsedMilliseconds(patchcore_post_end, yolo_post_end)
-                   << " compose=" << ElapsedMilliseconds(yolo_post_end, compose_end)
-                   << " total=" << ElapsedMilliseconds(total_start, compose_end);
-            InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, timing.str());
+            InspectionLogging::LogMessage(
+                InspectionLogging::LogLevel::Debug,
+                timing.ToLogString());
         }
         InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, "image processed successfully");
         return true;
