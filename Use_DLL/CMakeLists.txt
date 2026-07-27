@@ -5,6 +5,10 @@ project(UseInspectionDLLDemo LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 set(OPENCV_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../3rdparty/install_opencv")
 set(OPENCV_INCLUDE_DIR "${OPENCV_ROOT}/include")
 set(OPENCV_LIB_DIR "${OPENCV_ROOT}/lib")
@@ -39,7 +43,7 @@ set_target_properties(use_examples PROPERTIES
 
 add_custom_command(TARGET use_examples POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_CURRENT_SOURCE_DIR}/test.tif"
+    "${CMAKE_CURRENT_SOURCE_DIR}/config.ini"
     $<TARGET_FILE_DIR:use_examples>
 )
 
@@ -55,13 +59,11 @@ if(WIN32)
 
     set(ONNX_MODEL "${CMAKE_CURRENT_SOURCE_DIR}/../onnx_model")
 
-    foreach(ONNX_MODEL_USE ${ONNX_MODEL})
-        add_custom_command(TARGET use_examples POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${ONNX_MODEL_USE}"
-                $<TARGET_FILE_DIR:use_examples>
-            )
-    endforeach()
+    add_custom_command(TARGET use_examples POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${ONNX_MODEL}"
+        "$<TARGET_FILE_DIR:use_examples>/onnx_model"
+    )
 
     set(INSPECTION_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/bin/Release" CACHE PATH "InspectionDLL.dll 所在目录(可选)")
     if(INSPECTION_DLL_DIR AND EXISTS "${INSPECTION_DLL_DIR}")

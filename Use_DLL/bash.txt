@@ -1,34 +1,21 @@
-cmake -S . -B ./build -G "Visual Studio 17 2022" -A x64
-cmake --build ./build --config Release
+# Configure and build
+cmake -S Use_DLL -B Use_DLL/build
+cmake --build Use_DLL/build --config Release
 
-• 编译后运行的是：
+# Single PNG
+Use_DLL\build\bin\Release\use_examples.exe --mode single --input E:\images\test.png --input-type png --config Use_DLL\build\bin\Release\config.ini
 
-  Use_DLL\build\bin\Release\use_examples.exe
+# Single TIFF
+Use_DLL\build\bin\Release\use_examples.exe --mode single --input E:\images\test.tiff --input-type tiff --config Use_DLL\build\bin\Release\config.ini
 
-  单张 PNG：
+# Single float32 BIN (width and height are required when defaults do not match)
+Use_DLL\build\bin\Release\use_examples.exe --mode single --input E:\images\test.bin --input-type bin --width 1000 --height 800 --config Use_DLL\build\bin\Release\config.ini
 
-  Use_DLL\build\bin\Release\use_examples.exe --single-png E:\images\test.png --config Use_DLL\config.ini
+# Batch one format
+Use_DLL\build\bin\Release\use_examples.exe --mode batch --input E:\images --input-type tiff --output-dir E:\out --config Use_DLL\build\bin\Release\config.ini --recurse
 
-  指定检测图保存路径：
+# Batch PNG + TIFF + BIN automatically
+Use_DLL\build\bin\Release\use_examples.exe --mode batch --input E:\images --input-type auto --width 1000 --height 800 --output-dir E:\out --config Use_DLL\build\bin\Release\config.ini --recurse
 
-  Use_DLL\build\bin\Release\use_examples.exe --single-png E:\images\test.png --config Use_DLL\config.ini --overlay E:
-  \out\test_detect.png
-
-  批量处理 PNG 文件夹：
-
-  Use_DLL\build\bin\Release\use_examples.exe --batch-png --input-dir D:\A_data_images\corona_test_0717\MT_images\22_images\pngs_use2 --output-dir outaa
-
-  递归子目录：
-
-  Use_DLL\build\bin\Release\use_examples.exe --batch-png --input-dir E:\images --output-dir E:\out --config
-  Use_DLL\config.ini --recurse
-
-  输出内容：
-
-  - 检测图：E:\out\detect_images\xxx_detect.png
-  - 汇总表：E:\out\summary.csv
-
-  如果不想保存检测图：
-
-  Use_DLL\build\bin\Release\use_examples.exe --batch-png --input-dir E:\images --output-dir E:\out --config
-  Use_DLL\config.ini --no-save-overlay
+# Disable result image export
+Use_DLL\build\bin\Release\use_examples.exe --mode batch --input E:\images --input-type png --config Use_DLL\build\bin\Release\config.ini --no-save-images
