@@ -3,6 +3,8 @@
 #include <faiss/Index.h>
 #include <faiss/index_io.h>
 #include "image_process.h"
+#include "logger.h"
+#include "performance_timer.h"
 
 #include <algorithm>
 #include <cctype>
@@ -657,21 +659,30 @@ bool PatchCoreDetector::Infer(const cv::Mat& image, PatchCoreResult& result) {
     }
 
     try {
+        const bool timing_enabled =
+            InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug);
+        InspectionProfiling::PerformanceTimer total_timer(timing_enabled);
+        InspectionProfiling::PerformanceTimer stage_timer(timing_enabled);
+
         std::vector<float> input_nchw;
         PatchCoreResult::MetaData meta{};
         PreprocessToNCHW(image, input_nchw, meta);
+        const double preprocess_ms = stage_timer.RestartMilliseconds();
 
         std::vector<Ort::Value> outputs;
         if (!RunBackbone(input_nchw, outputs)) return false;
+        const double backbone_ms = stage_timer.RestartMilliseconds();
 
         std::vector<float> embeddings;
         if (!ExtractEmbeddings(outputs, embeddings)) return false;
+        const double embedding_ms = stage_timer.RestartMilliseconds();
 
         const int ref_h = ref_patch_shape_.first;
         const int ref_w = ref_patch_shape_.second;
         const int P = ref_h * ref_w;
 
         std::vector<float> patch_scores = ComputeAnomalyScores(embeddings, P, target_embed_dim_);
+        const double feature_match_ms = stage_timer.RestartMilliseconds();
         if (patch_scores.size() != static_cast<size_t>(P)) {
             std::cerr << "[PatchCore] patch_scores size mismatch" << std::endl;
             return false;
@@ -684,6 +695,21 @@ bool PatchCoreDetector::Infer(const cv::Mat& image, PatchCoreResult& result) {
 
         cv::Mat score_map(ref_h, ref_w, CV_32F, patch_scores.data());
         result.patch_scores = score_map.clone();
+
+        const double result_build_ms = stage_timer.ElapsedMilliseconds();
+        const double total_ms = total_timer.ElapsedMilliseconds();
+        if (timing_enabled) {
+            InspectionLogging::LogMessage(
+                InspectionLogging::LogLevel::Debug,
+                InspectionProfiling::FormatTimingLog({
+                    {"patchcore_preprocess", preprocess_ms},
+                    {"patchcore_backbone", backbone_ms},
+                    {"patchcore_embedding", embedding_ms},
+                    {"patchcore_feature_match", feature_match_ms},
+                    {"patchcore_result_build", result_build_ms},
+                    {"patchcore_internal_total", total_ms},
+                }));
+        }
 
         return true;
     } catch (const std::exception& e) {
