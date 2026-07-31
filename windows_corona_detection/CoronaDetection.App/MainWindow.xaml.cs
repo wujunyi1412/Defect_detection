@@ -248,6 +248,8 @@ public partial class MainWindow : Window
                     string outputImage = string.Empty;
                     string saveError = string.Empty;
                     DetectionResult result;
+                    double inferenceMs;
+                    double saveMs;
                     if (SaveImagesCheck.IsChecked == true)
                     {
                         outputImage = DetectionFiles.BuildOutputImagePath(
@@ -258,13 +260,18 @@ public partial class MainWindow : Window
                             _cancellation.Token);
                         result = nativeOverlay.Result;
                         saveError = nativeOverlay.ExportError;
+                        inferenceMs = nativeOverlay.InferenceMs;
+                        saveMs = nativeOverlay.SaveMs;
                         if (!string.IsNullOrEmpty(saveError))
                             outputImage = string.Empty;
                     }
                     else
                     {
-                        result = await Task.Run(
+                        TimedDetectionResult timedResult = await Task.Run(
                             () => ProcessWithAsciiPath(file), _cancellation.Token);
+                        result = timedResult.Result;
+                        inferenceMs = timedResult.InferenceMs;
+                        saveMs = 0.0;
                     }
                     stopwatch.Stop();
                     row = new ResultRow
@@ -274,10 +281,9 @@ public partial class MainWindow : Window
                         InputPath = file,
                         Verdict = result.Verdict,
                         DefectCount = result.Details.Count,
-                        YoloScore = result.YoloScore,
-                        PatchcoreScore = result.PatchcoreScore,
-                        AreaRatio = result.PatchcoreAreaRatio,
-                        ElapsedMs = stopwatch.Elapsed.TotalMilliseconds,
+                        InferenceMs = inferenceMs,
+                        SaveMs = saveMs,
+                        TotalMs = stopwatch.Elapsed.TotalMilliseconds,
                         Status = string.IsNullOrEmpty(saveError) ? "完成" : "部分完成",
                         OutputPath = outputImage,
                         Error = saveError
@@ -298,7 +304,7 @@ public partial class MainWindow : Window
                         Index = i + 1,
                         FileName = Path.GetFileName(file),
                         InputPath = file,
-                        ElapsedMs = stopwatch.Elapsed.TotalMilliseconds,
+                        TotalMs = stopwatch.Elapsed.TotalMilliseconds,
                         Status = "失败",
                         Error = ex.Message
                     };
@@ -336,10 +342,10 @@ public partial class MainWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _cancellation?.Cancel();
 
-    private DetectionResult ProcessWithAsciiPath(string originalPath)
+    private TimedDetectionResult ProcessWithAsciiPath(string originalPath)
     {
         if (originalPath.All(c => c <= 127))
-            return _engine.Process(originalPath);
+            return _engine.ProcessTimed(originalPath);
 
         string tempRoot = Path.Combine(Path.GetTempPath(), "corona_detection_ascii");
         Directory.CreateDirectory(tempRoot);
@@ -348,7 +354,7 @@ public partial class MainWindow : Window
         try
         {
             File.Copy(originalPath, tempFile, true);
-            return _engine.Process(tempFile);
+            return _engine.ProcessTimed(tempFile);
         }
         finally
         {
@@ -382,11 +388,16 @@ public partial class MainWindow : Window
                 return native;
             if (!File.Exists(temporaryOutput))
                 return new NativeOverlayResult(
-                    native.Result, "DLL 未生成可视化图片。");
+                    native.Result,
+                    "DLL 未生成可视化图片。",
+                    native.InferenceMs,
+                    native.SaveMs);
 
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+            var moveTimer = Stopwatch.StartNew();
             File.Move(temporaryOutput, destinationPath, true);
-            return native;
+            moveTimer.Stop();
+            return native with { SaveMs = native.SaveMs + moveTimer.Elapsed.TotalMilliseconds };
         }
         catch (Exception ex)
         {

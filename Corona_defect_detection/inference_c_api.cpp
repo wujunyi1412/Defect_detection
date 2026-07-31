@@ -1,6 +1,7 @@
 #include "inference_c_api.h"
 #include "inference_dll.h"
 #include "internal/overlay_renderer.h"
+#include "performance_timer.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -195,17 +196,42 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePath(
     const char* image_path,
     InspectionResultC* out_result
 ) {
+    return Inspection_ProcessImagePathTimed(handle, image_path, out_result, nullptr);
+}
+
+INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathTimed(
+    InspectionHandle handle,
+    const char* image_path,
+    InspectionResultC* out_result,
+    double* o_inference_ms
+) {
     ZeroResult(out_result);
+    if (o_inference_ms) o_inference_ms[0] = 0.0;
     auto* eng = ToEngine(handle);
     if (!eng || !image_path || !out_result)  return INSPECTION_STATUS_INVALID_ARGUMENT;
 
-    InspectionDLL::InferenceResult tmp;
-    if (!eng->ProcessImagePath(std::string(image_path), tmp)) {
+    try {
+        // File I/O is deliberately excluded from inference time.
+        cv::Mat input_image = cv::imread(image_path, cv::IMREAD_UNCHANGED);
+        if (input_image.empty()) {
+            return INSPECTION_STATUS_INFERENCE_FAILED;
+        }
+
+        InspectionDLL::InferenceResult tmp;
+        InspectionProfiling::PerformanceTimer inference_timer(true);
+        const bool succeeded = eng->ProcessImage(input_image, tmp);
+        if (o_inference_ms) {
+            o_inference_ms[0] = inference_timer.ElapsedMilliseconds();
+        }
+        if (!succeeded) {
+            return INSPECTION_STATUS_INFERENCE_FAILED;
+        }
+
+        FillResult(tmp, out_result);
+        return INSPECTION_STATUS_OK;
+    } catch (...) {
         return INSPECTION_STATUS_INFERENCE_FAILED;
     }
-
-    FillResult(tmp, out_result);
-    return INSPECTION_STATUS_OK;
 }
 
 // 处理单张图像数组
@@ -214,9 +240,13 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathToOverlay
     const char* image_path,
     const char* output_path,
     InspectionResultC* out_result,
-    char* o_message
+    char* o_message,
+    double* o_inference_ms,
+    double* o_save_ms
 ) {
     ZeroResult(out_result);
+    if (o_inference_ms) o_inference_ms[0] = 0.0;
+    if (o_save_ms) o_save_ms[0] = 0.0;
     auto* eng = ToEngine(handle);
     if (!eng || !image_path || !output_path || !out_result) {
         CopyExceptionMessage("invalid handle, image path, output path, or result.", o_message);
@@ -231,12 +261,18 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathToOverlay
         }
 
         InspectionDLL::InferenceResult tmp;
-        if (!eng->ProcessImage(input_image, tmp)) {
+        InspectionProfiling::PerformanceTimer inference_timer(true);
+        const bool inference_succeeded = eng->ProcessImage(input_image, tmp);
+        if (o_inference_ms) {
+            o_inference_ms[0] = inference_timer.ElapsedMilliseconds();
+        }
+        if (!inference_succeeded) {
             CopyExceptionMessage(eng->GetLastError().c_str(), o_message);
             return INSPECTION_STATUS_INFERENCE_FAILED;
         }
         FillResult(tmp, out_result);
 
+        InspectionProfiling::PerformanceTimer save_timer(true);
         cv::Mat gray_image;
         if (input_image.channels() == 1) {
             gray_image = input_image;
@@ -267,8 +303,14 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathToOverlay
                 eng->ShouldConcatOriginalImage(),
                 output_path,
                 overlay_err)) {
+            if (o_save_ms) {
+                o_save_ms[0] = save_timer.ElapsedMilliseconds();
+            }
             CopyExceptionMessage(overlay_err.c_str(), o_message);
             return INSPECTION_STATUS_OVERLAY_FAILED;
+        }
+        if (o_save_ms) {
+            o_save_ms[0] = save_timer.ElapsedMilliseconds();
         }
 
         CopyExceptionMessage("inference and 8-bit overlay export success", o_message);

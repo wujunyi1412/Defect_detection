@@ -65,17 +65,16 @@ internal static class DetectionFiles
     {
         Directory.CreateDirectory(outputRoot);
         var summary = new StringBuilder("\uFEFF");
-        summary.AppendLine("序号,文件名,原图路径,判定,缺陷数,YOLO分数,PatchCore分数,面积占比,耗时ms,状态,结果图路径,错误");
+        summary.AppendLine("序号,文件名,原图路径,判定,缺陷数,推理耗时ms,图片保存耗时ms,总耗时ms,状态,结果图路径,错误");
         foreach (var row in rows)
         {
             summary.AppendLine(string.Join(",",
                 row.Index,
                 Csv(row.FileName), Csv(row.InputPath), Csv(row.Verdict),
                 row.DefectCount,
-                row.YoloScore.ToString("0.####", CultureInfo.InvariantCulture),
-                row.PatchcoreScore.ToString("0.####", CultureInfo.InvariantCulture),
-                row.AreaRatio.ToString("0.####", CultureInfo.InvariantCulture),
-                row.ElapsedMs.ToString("0.###", CultureInfo.InvariantCulture),
+                row.InferenceMs.ToString("0.###", CultureInfo.InvariantCulture),
+                row.SaveMs.ToString("0.###", CultureInfo.InvariantCulture),
+                row.TotalMs.ToString("0.###", CultureInfo.InvariantCulture),
                 Csv(row.Status), Csv(row.OutputPath), Csv(row.Error)));
         }
         File.WriteAllText(Path.Combine(outputRoot, "summary.csv"), summary.ToString(), new UTF8Encoding(false));
@@ -102,10 +101,9 @@ public sealed class ResultRow
     public string InputPath { get; init; } = string.Empty;
     public string Verdict { get; init; } = string.Empty;
     public int DefectCount { get; init; }
-    public float YoloScore { get; init; }
-    public float PatchcoreScore { get; init; }
-    public float AreaRatio { get; init; }
-    public double ElapsedMs { get; init; }
+    public double InferenceMs { get; init; }
+    public double SaveMs { get; init; }
+    public double TotalMs { get; init; }
     public string Status { get; init; } = string.Empty;
     public string OutputPath { get; init; } = string.Empty;
     public string Error { get; init; } = string.Empty;

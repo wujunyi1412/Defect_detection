@@ -76,12 +76,22 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePath(
     InspectionResultC* out_result
 );
 
+// Processes one image and returns native inference time (image decoding excluded).
+INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathTimed(
+    InspectionHandle handle,
+    const char* image_path,
+    InspectionResultC* out_result,
+    double o_inference_ms[1]
+);
+
 INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathToOverlayFile(
     InspectionHandle handle,
     const char* image_path,
     const char* output_path,
     InspectionResultC* out_result,
-    char o_message[O_MESSAGE_LEN]
+    char o_message[O_MESSAGE_LEN],
+    double o_inference_ms[1],
+    double o_save_ms[1]
 );
 
 INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(

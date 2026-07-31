@@ -33,6 +33,9 @@ internal sealed class InspectionEngine : IDisposable
     }
 
     public DetectionResult Process(string imagePath)
+        => ProcessTimed(imagePath).Result;
+
+    public TimedDetectionResult ProcessTimed(string imagePath)
     {
         lock (_sync)
         {
@@ -40,11 +43,13 @@ internal sealed class InspectionEngine : IDisposable
                 throw new InvalidOperationException("模型尚未初始化。");
 
             var native = NativeMethods.InspectionResult.Create();
-            int code = NativeMethods.Inspection_ProcessImagePath(_handle, imagePath, ref native);
+            int code = NativeMethods.Inspection_ProcessImagePathTimed(
+                _handle, imagePath, ref native, out double inferenceMs);
             if (code != NativeMethods.StatusOk)
                 throw new InvalidOperationException($"图片推理失败（状态码 {code}）。");
 
-            return ConvertResult(native);
+            return new TimedDetectionResult(
+                ConvertResult(native), inferenceMs);
         }
     }
 
@@ -58,14 +63,18 @@ internal sealed class InspectionEngine : IDisposable
             var native = NativeMethods.InspectionResult.Create();
             var message = new StringBuilder(100);
             int code = NativeMethods.Inspection_ProcessImagePathToOverlayFile(
-                _handle, imagePath, outputPath, ref native, message);
+                _handle, imagePath, outputPath, ref native, message,
+                out double inferenceMs, out double saveMs);
             DetectionResult result = ConvertResult(native);
             if (code == NativeMethods.StatusOk)
-                return new NativeOverlayResult(result, string.Empty);
+                return new NativeOverlayResult(
+                    result, string.Empty, inferenceMs, saveMs);
             if (code == 5)
                 return new NativeOverlayResult(
                     result,
-                    $"DLL 生成可视化图片失败（状态码 {code}）：{message}");
+                    $"DLL 生成可视化图片失败（状态码 {code}）：{message}",
+                    inferenceMs,
+                    saveMs);
             throw new InvalidOperationException(
                 $"图片推理失败（状态码 {code}）：{message}");
         }
@@ -116,4 +125,10 @@ internal sealed record DetectionResult(
 
 internal sealed record NativeOverlayResult(
     DetectionResult Result,
-    string ExportError);
+    string ExportError,
+    double InferenceMs,
+    double SaveMs);
+
+internal sealed record TimedDetectionResult(
+    DetectionResult Result,
+    double InferenceMs);

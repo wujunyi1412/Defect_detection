@@ -126,10 +126,9 @@
                                     <DataGridTextColumn Header="文件名" Binding="{Binding FileName}" Width="190"/>
                                     <DataGridTextColumn Header="判定" Binding="{Binding Verdict}" Width="65"/>
                                     <DataGridTextColumn Header="缺陷数" Binding="{Binding DefectCount}" Width="70"/>
-                                    <DataGridTextColumn Header="YOLO" Binding="{Binding YoloScore, StringFormat=0.####}" Width="75"/>
-                                    <DataGridTextColumn Header="PatchCore" Binding="{Binding PatchcoreScore, StringFormat=0.####}" Width="90"/>
-                                    <DataGridTextColumn Header="面积占比" Binding="{Binding AreaRatio, StringFormat=0.####}" Width="85"/>
-                                    <DataGridTextColumn Header="耗时(ms)" Binding="{Binding ElapsedMs, StringFormat=0.0}" Width="85"/>
+                                    <DataGridTextColumn Header="推理耗时(ms)" Binding="{Binding InferenceMs, StringFormat=0.0}" Width="105"/>
+                                    <DataGridTextColumn Header="图片保存耗时(ms)" Binding="{Binding SaveMs, StringFormat=0.0}" Width="125"/>
+                                    <DataGridTextColumn Header="总耗时(ms)" Binding="{Binding TotalMs, StringFormat=0.0}" Width="95"/>
                                     <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="85"/>
                                     <DataGridTextColumn Header="错误信息" Binding="{Binding Error}" Width="*"/>
                                 </DataGrid.Columns>

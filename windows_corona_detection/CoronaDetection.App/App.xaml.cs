@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -34,10 +36,22 @@ public partial class App : Application
                 if (args.Length < 3)
                     throw new ArgumentException(
                         "用法：CoronaDetection.exe --overlay-self-test <图片路径> <输出PNG路径>");
+                var totalTimer = Stopwatch.StartNew();
                 NativeOverlayResult overlay = engine.ProcessToOverlayFile(
                     Path.GetFullPath(args[1]), Path.GetFullPath(args[2]));
+                totalTimer.Stop();
                 if (!string.IsNullOrEmpty(overlay.ExportError))
                     throw new InvalidOperationException(overlay.ExportError);
+                if (args.Length >= 4)
+                {
+                    string report =
+                        "InferenceMs,SaveMs,TotalMs" + Environment.NewLine +
+                        string.Join(",",
+                            overlay.InferenceMs.ToString("0.###", CultureInfo.InvariantCulture),
+                            overlay.SaveMs.ToString("0.###", CultureInfo.InvariantCulture),
+                            totalTimer.Elapsed.TotalMilliseconds.ToString("0.###", CultureInfo.InvariantCulture));
+                    File.WriteAllText(Path.GetFullPath(args[3]), report);
+                }
             }
             else
             {

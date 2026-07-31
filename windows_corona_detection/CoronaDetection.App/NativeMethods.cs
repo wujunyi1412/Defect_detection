@@ -55,12 +55,21 @@ internal static class NativeMethods
         ref InspectionResult result);
 
     [DllImport("Corona_defect_detection.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int Inspection_ProcessImagePathTimed(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPStr)] string imagePath,
+        ref InspectionResult result,
+        out double inferenceMs);
+
+    [DllImport("Corona_defect_detection.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     internal static extern int Inspection_ProcessImagePathToOverlayFile(
         IntPtr handle,
         [MarshalAs(UnmanagedType.LPStr)] string imagePath,
         [MarshalAs(UnmanagedType.LPStr)] string outputPath,
         ref InspectionResult result,
-        StringBuilder message);
+        StringBuilder message,
+        out double inferenceMs,
+        out double saveMs);
 
     [DllImport("Corona_defect_detection.dll", CallingConvention = CallingConvention.Cdecl)]
     internal static extern void Inspection_Release(IntPtr handle);
