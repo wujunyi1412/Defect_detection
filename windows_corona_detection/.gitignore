@@ -1,0 +1,73 @@
+# CMake build trees and generated files
+/build/
+/out/
+/cmake-build-*/
+/**/CMakeFiles/
+/**/CMakeCache.txt
+/**/cmake_install.cmake
+/**/CTestTestfile.cmake
+/**/Makefile
+*.vcxproj
+*.vcxproj.filters
+*.sln
+
+# .NET / WPF build outputs
+**/bin/
+**/obj/
+**/publish/
+artifacts/
+TestResults/
+*.deps.json
+*.runtimeconfig.json
+*.pdb
+*.nupkg
+
+# Visual Studio, Rider and VS Code user state
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+_ReSharper*/
+*.DotSettings.user
+
+# Native runtime binaries copied from the C++ project
+/Runtime/*.dll
+/Runtime/*.lib
+/Runtime/*.exp
+
+# Large AI model/index files
+*.onnx
+*.faiss
+*.engine
+*.plan
+*.weights
+*.pt
+*.pth
+*.ckpt
+
+# Generated detection results and diagnostics
+inspection_output/
+detect_images/
+summary.csv
+details.csv
+startup_error.log
+self_test_error.log
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.userprefs
+~$*
+
+# Windows metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

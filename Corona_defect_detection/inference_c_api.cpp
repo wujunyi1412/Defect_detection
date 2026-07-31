@@ -18,6 +18,7 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 
 #ifdef _WIN32
 #ifdef min
@@ -208,6 +209,79 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePath(
 }
 
 // 处理单张图像数组
+INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathToOverlayFile(
+    InspectionHandle handle,
+    const char* image_path,
+    const char* output_path,
+    InspectionResultC* out_result,
+    char* o_message
+) {
+    ZeroResult(out_result);
+    auto* eng = ToEngine(handle);
+    if (!eng || !image_path || !output_path || !out_result) {
+        CopyExceptionMessage("invalid handle, image path, output path, or result.", o_message);
+        return INSPECTION_STATUS_INVALID_ARGUMENT;
+    }
+
+    try {
+        cv::Mat input_image = cv::imread(image_path, cv::IMREAD_UNCHANGED);
+        if (input_image.empty()) {
+            CopyExceptionMessage("failed to read input image.", o_message);
+            return INSPECTION_STATUS_INFERENCE_FAILED;
+        }
+
+        InspectionDLL::InferenceResult tmp;
+        if (!eng->ProcessImage(input_image, tmp)) {
+            CopyExceptionMessage(eng->GetLastError().c_str(), o_message);
+            return INSPECTION_STATUS_INFERENCE_FAILED;
+        }
+        FillResult(tmp, out_result);
+
+        cv::Mat gray_image;
+        if (input_image.channels() == 1) {
+            gray_image = input_image;
+        } else if (input_image.channels() == 3) {
+            cv::cvtColor(input_image, gray_image, cv::COLOR_BGR2GRAY);
+        } else if (input_image.channels() == 4) {
+            cv::cvtColor(input_image, gray_image, cv::COLOR_BGRA2GRAY);
+        } else {
+            CopyExceptionMessage("unsupported input image channel count.", o_message);
+            return INSPECTION_STATUS_OVERLAY_FAILED;
+        }
+
+        cv::Mat float_image;
+        gray_image.convertTo(float_image, CV_32FC1);
+        if (!float_image.isContinuous()) {
+            float_image = float_image.clone();
+        }
+
+        std::string overlay_err;
+        if (!InspectionOverlay::RenderResultOverlayToFile(
+                float_image.ptr<float>(0),
+                float_image.cols,
+                float_image.rows,
+                tmp,
+                eng->ShouldDrawDefectBox(),
+                eng->ShouldDrawBoxDetails(),
+                eng->GetMaskOverlayOptions(),
+                eng->ShouldConcatOriginalImage(),
+                output_path,
+                overlay_err)) {
+            CopyExceptionMessage(overlay_err.c_str(), o_message);
+            return INSPECTION_STATUS_OVERLAY_FAILED;
+        }
+
+        CopyExceptionMessage("inference and 8-bit overlay export success", o_message);
+        return INSPECTION_STATUS_OK;
+    } catch (const std::exception& e) {
+        CopyExceptionMessage(e.what(), o_message);
+        return INSPECTION_STATUS_OVERLAY_FAILED;
+    } catch (...) {
+        CopyExceptionMessage("image inference or overlay export failed.", o_message);
+        return INSPECTION_STATUS_OVERLAY_FAILED;
+    }
+}
+
 INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessFloatArray(
     InspectionHandle handle,
     const float* image_array,

@@ -1,6 +1,8 @@
 #include <iostream>
+#include <filesystem>
 #include <string>
 
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include "config.h"
@@ -23,6 +25,47 @@ int TestOverlayTextFit() {
     const std::string original = "VeryLongDefectLabel123456";
     const std::string clipped = InspectionOverlay::FitTextToWidthForTest(original, 30, 0.55, 1);
     return AssertTrue(!clipped.empty(), "FitTextToWidth should produce non-empty output for narrow width");
+}
+
+int TestFloatOverlayFileIs8Bit() {
+    cv::Mat input(48, 64, CV_32FC1);
+    for (int y = 0; y < input.rows; ++y) {
+        float* row = input.ptr<float>(y);
+        for (int x = 0; x < input.cols; ++x) {
+            row[x] = static_cast<float>(x * 0.25 + y * 0.1);
+        }
+    }
+
+    InspectionDLL::InferenceResult result;
+    result.result = "OK";
+    result.yolo_score = 0.0f;
+    result.patchcore_score = 0.0f;
+    result.patchcore_area_ratio = 0.0f;
+    InspectionDLL::MaskOverlayOptions mask_options;
+    const std::filesystem::path output_path =
+        std::filesystem::temp_directory_path() / "corona_overlay_smoke.png";
+
+    std::string error;
+    const bool saved = InspectionOverlay::RenderResultOverlayToFile(
+        input.ptr<float>(0),
+        input.cols,
+        input.rows,
+        result,
+        true,
+        true,
+        mask_options,
+        false,
+        output_path.string().c_str(),
+        error);
+    if (AssertTrue(saved, "float overlay export should succeed: " + error)) return 1;
+
+    const cv::Mat output = cv::imread(output_path.string(), cv::IMREAD_UNCHANGED);
+    std::error_code remove_error;
+    std::filesystem::remove(output_path, remove_error);
+    if (AssertTrue(!output.empty(), "exported overlay should be readable")) return 1;
+    if (AssertTrue(output.depth() == CV_8U, "exported overlay should be 8-bit")) return 1;
+    if (AssertTrue(output.channels() == 3, "exported overlay should be three-channel")) return 1;
+    return 0;
 }
 
 int TestConfigDefaults() {
@@ -121,6 +164,7 @@ int TestYoloPostprocessReusesBinaryMask() {
 
 int main() {
     if (TestOverlayTextFit()) return 1;
+    if (TestFloatOverlayFileIs8Bit()) return 1;
     if (TestConfigDefaults()) return 1;
     if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;

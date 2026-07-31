@@ -356,6 +356,69 @@ bool RenderResultOverlayToHalconHandle(
 }
 
 // 测试用辅助函数：将文本适配到指定宽度
+bool RenderResultOverlayToFile(
+    const float* image_array,
+    int32_t width,
+    int32_t height,
+    const InspectionDLL::InferenceResult& result,
+    bool draw_defect_box,
+    bool draw_box_details,
+    const InspectionDLL::MaskOverlayOptions& mask_options,
+    bool concat_original_image,
+    const char* output_path,
+    std::string& err) {
+    if (!output_path || output_path[0] == '\0') {
+        err = "overlay output path is empty";
+        return false;
+    }
+
+    int32_t serialized_handle[1] = {0};
+    if (!RenderResultOverlayToHalconHandle(
+            image_array,
+            width,
+            height,
+            result,
+            draw_defect_box,
+            draw_box_details,
+            mask_options,
+            concat_original_image,
+            serialized_handle,
+            err)) {
+        return false;
+    }
+
+    HalconCpp::HTuple serialized_item;
+    serialized_item[0] = static_cast<Hlong>(serialized_handle[0]);
+    try {
+        HalconCpp::HObject rendered_image;
+        HalconCpp::DeserializeObject(&rendered_image, serialized_item);
+        HalconCpp::WriteImage(
+            rendered_image,
+            HalconCpp::HTuple("png"),
+            HalconCpp::HTuple(0),
+            HalconCpp::HTuple(output_path));
+        HalconCpp::ClearSerializedItem(serialized_item);
+        serialized_item.Clear();
+        return true;
+    } catch (const std::exception& e) {
+        try {
+            HalconCpp::ClearSerializedItem(serialized_item);
+        } catch (...) {
+        }
+        serialized_item.Clear();
+        err = e.what();
+        return false;
+    } catch (...) {
+        try {
+            HalconCpp::ClearSerializedItem(serialized_item);
+        } catch (...) {
+        }
+        serialized_item.Clear();
+        err = "failed to save overlay image";
+        return false;
+    }
+}
+
 std::string FitTextToWidthForTest(const std::string& text, int max_width, double font_scale, int thickness) {
     return FitTextToWidth(text, max_width, font_scale, thickness);
 }
