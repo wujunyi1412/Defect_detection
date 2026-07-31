@@ -26,6 +26,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+        string version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+        Title = $"Corona 瑕疵检测工作站 v{version}";
+        VersionText.Text = $"版本 {version}";
         FormatCombo.ItemsSource = DetectionFiles.FormatExtensions.Keys;
         FormatCombo.SelectedIndex = 0;
     }

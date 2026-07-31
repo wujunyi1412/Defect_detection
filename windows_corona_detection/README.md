@@ -5,6 +5,15 @@ Windows x64 桌面程序，C# WPF/XAML 界面通过 P/Invoke 调用
 
 ## 构建
 
+推荐先关闭正在运行的上位机，然后在仓库根目录双击：
+
+```text
+build_windows_app.bat
+```
+
+该脚本会依次编译 C++ DLL、更新 `Runtime` 中的 DLL，再通过本目录的
+`CMakeLists.txt` 发布 WPF 程序。
+
 项目以 `CMakeLists.txt` 为唯一构建入口。可以使用 Visual Studio 2022
 “打开本地文件夹”，选择 `vs2022-x64` 预设；也可以在项目根目录运行：
 
@@ -19,6 +28,15 @@ cmake --build --preset vs2022-release
 
 默认生成 Windows x64 框架依赖版本，目标电脑需要安装 .NET 9 Desktop Runtime。
 若需自包含版本，联网配置 CMake 时加入 `-DCORONA_SELF_CONTAINED=ON`。
+
+要生成包含 .NET 运行时、原生 DLL 和必要模型的精简便携目录，在仓库根目录双击：
+
+```text
+package_windows_app.bat
+```
+
+输出位于 `package\CoronaDetection_1.0.0_win-x64`。目标机器无需安装 .NET，
+但仍必须具备合法有效的 HALCON 运行许可。
 
 ## 使用提示
 

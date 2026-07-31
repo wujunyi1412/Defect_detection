@@ -193,11 +193,11 @@ if(WIN32)
         $<TARGET_FILE_DIR:Corona_defect_detection>    
     )
 
-#    add_custom_command(TARGET Corona_defect_detection POST_BUILD
-#        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-#        "${HALCON_BIN_DIR}/halcon.dll"
-#        $<TARGET_FILE_DIR:Corona_defect_detection>
-#    )
+    add_custom_command(TARGET Corona_defect_detection POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${HALCON_BIN_DIR}/halcon.dll"
+        $<TARGET_FILE_DIR:Corona_defect_detection>
+    )
 
     add_custom_command(TARGET Corona_defect_detection POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
