@@ -38,10 +38,18 @@ internal sealed class IniDocument
         for (int i = 0; i < document._lines.Count; i++)
         {
             string trimmed = document._lines[i].Trim();
-            if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
+            if (trimmed.StartsWith('['))
             {
-                section = trimmed[1..^1].Trim();
-                continue;
+                int closeBracket = trimmed.IndexOf(']');
+                if (closeBracket > 1)
+                {
+                    string suffix = trimmed[(closeBracket + 1)..].TrimStart();
+                    if (suffix.Length == 0 || suffix[0] is ';' or '#')
+                    {
+                        section = trimmed[1..closeBracket].Trim();
+                        continue;
+                    }
+                }
             }
             if (trimmed.Length == 0 || trimmed[0] is ';' or '#')
                 continue;

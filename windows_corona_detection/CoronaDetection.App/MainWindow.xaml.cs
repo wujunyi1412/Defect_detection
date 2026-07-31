@@ -34,9 +34,6 @@ public partial class MainWindow : Window
     {
         _loaded = true;
         LoadConfiguration();
-        OutputPathText.Text = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "Corona检测结果", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
 
         // Let WPF render the window before the heavy model initialization starts.
         await Task.Yield();
