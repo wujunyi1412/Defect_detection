@@ -43,6 +43,8 @@ public:
     bool draw_defect_box_ = true;
     bool draw_box_details_ = true;
     bool concat_original_image_ = false;
+    bool yolo_enabled_ = true;
+    bool patchcore_enabled_ = true;
     MaskOverlayOptions mask_overlay_options_;
     std::string last_error_;
 
@@ -87,6 +89,7 @@ InspectionEngine::~InspectionEngine() {
 // InspectionEngine 初始化函数
 bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->ClearLastError();
+    pImpl->initialized_ = false;
     InspectionConfig::InspectionConfigData config;
     std::string err;
     if (!InspectionConfig::LoadInspectionConfig(config_path, config, err)) {
@@ -113,6 +116,8 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->draw_defect_box_ = config.draw_defect_box;
     pImpl->draw_box_details_ = config.draw_box_details;
     pImpl->concat_original_image_ = config.concat_original_image;
+    pImpl->yolo_enabled_ = config.yolo_enabled;
+    pImpl->patchcore_enabled_ = config.patchcore_enabled;
     pImpl->mask_overlay_options_.enabled = config.draw_defect_mask;
     pImpl->mask_overlay_options_.color_r = config.defect_mask_color_r;
     pImpl->mask_overlay_options_.color_g = config.defect_mask_color_g;
@@ -125,18 +130,22 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->brightstripes_filter_ = config.brightstripes_filter;
     pImpl->lineartifacts_filter_ = config.lineartifacts_filter;
 
-    pImpl->yolo_detector.SetNmsMode(
-        config.yolo_nms_class_aware ? YOLO::YOLOv8Segmentor::NmsMode::ClassAware : YOLO::YOLOv8Segmentor::NmsMode::Global
-    );
+    if (pImpl->yolo_enabled_) {
+        pImpl->yolo_detector.SetNmsMode(
+            config.yolo_nms_class_aware ? YOLO::YOLOv8Segmentor::NmsMode::ClassAware : YOLO::YOLOv8Segmentor::NmsMode::Global
+        );
 
-    if (!pImpl->yolo_detector.Initialize(config.yolo_model_path, config.yolo_score_threshold, config.yolo_iou_threshold, {640, 640}, config.ort_intra_threads)) {
-        pImpl->SetLastError("failed to initialize YOLO detector");
-        return false;
+        if (!pImpl->yolo_detector.Initialize(config.yolo_model_path, config.yolo_score_threshold, config.yolo_iou_threshold, {640, 640}, config.ort_intra_threads)) {
+            pImpl->SetLastError("failed to initialize YOLO detector");
+            return false;
+        }
     }
 
-    if (!pImpl->patchcore_detector.Initialize(config.patchcore_model_path, config.faiss_index_path, config.metadata_path, config.ort_intra_threads)) {
-        pImpl->SetLastError("failed to initialize PatchCore detector");
-        return false;
+    if (pImpl->patchcore_enabled_) {
+        if (!pImpl->patchcore_detector.Initialize(config.patchcore_model_path, config.faiss_index_path, config.metadata_path, config.ort_intra_threads)) {
+            pImpl->SetLastError("failed to initialize PatchCore detector");
+            return false;
+        }
     }
 
     pImpl->initialized_ = true;
@@ -157,6 +166,16 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
         return false;
     }
 
+    if (!pImpl->yolo_enabled_ && !pImpl->patchcore_enabled_) {
+        output.result = "OK";
+        output.details.clear();
+        output.yolo_score = 0.0f;
+        output.patchcore_score = 0.0f;
+        output.patchcore_area_ratio = 0.0f;
+        InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, "image processing skipped because all models are disabled");
+        return true;
+    }
+
     try {
         const bool timing_enabled =
             InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug);
@@ -165,57 +184,71 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
 
         Internal::InferenceImages images = Internal::PrepareInferenceImages(input_image);
         timing.preprocess_ms = total_timer.ElapsedMilliseconds();
-        if (images.patchcore_bgr.empty() || images.patchcore_gray.empty()) {
+        if (pImpl->patchcore_enabled_ && (images.patchcore_bgr.empty() || images.patchcore_gray.empty())) {
             pImpl->SetLastError("image preprocessing failed for patchcore");
             return false;
         }
 
-        if (images.yolo_bgr.empty() || images.yolo_gray.empty()) {
+        if (pImpl->yolo_enabled_ && (images.yolo_bgr.empty() || images.yolo_gray.empty())) {
             pImpl->SetLastError("image preprocessing failed for yolo");
             return false;
         }
 
-        const cv::Size img_shape = images.patchcore_bgr.size();
+        const cv::Size img_shape = pImpl->patchcore_enabled_
+            ? images.patchcore_bgr.size()
+            : images.yolo_bgr.size();
 
         InspectionProfiling::PerformanceTimer models_timer(timing_enabled);
         std::vector<YOLO::Detection> yolo_detections;
-        auto yolo_future = std::async(
-            std::launch::async,
-            [&]() {
-                InspectionProfiling::PerformanceTimer timer(timing_enabled);
-                ModelRunResult run;
-                run.success = pImpl->yolo_detector.Infer(images.yolo_bgr, yolo_detections);
-                run.elapsed_ms = timer.ElapsedMilliseconds();
-                return run;
-            });
+        std::future<ModelRunResult> yolo_future;
+        if (pImpl->yolo_enabled_) {
+            yolo_future = std::async(
+                std::launch::async,
+                [&]() {
+                    InspectionProfiling::PerformanceTimer timer(timing_enabled);
+                    ModelRunResult run;
+                    run.success = pImpl->yolo_detector.Infer(images.yolo_bgr, yolo_detections);
+                    run.elapsed_ms = timer.ElapsedMilliseconds();
+                    return run;
+                });
+        }
 
-        InspectionProfiling::PerformanceTimer patchcore_timer(timing_enabled);
         PatchCore::PatchCoreResult patchcore_result;
-        const bool patchcore_success = pImpl->patchcore_detector.Infer(images.patchcore_bgr, patchcore_result);
-        timing.patchcore_infer_ms = patchcore_timer.ElapsedMilliseconds();
-        const ModelRunResult yolo_run = yolo_future.get();
+        bool patchcore_success = false;
+        if (pImpl->patchcore_enabled_) {
+            InspectionProfiling::PerformanceTimer patchcore_timer(timing_enabled);
+            patchcore_success = pImpl->patchcore_detector.Infer(images.patchcore_bgr, patchcore_result);
+            timing.patchcore_infer_ms = patchcore_timer.ElapsedMilliseconds();
+        }
+        const ModelRunResult yolo_run = pImpl->yolo_enabled_ ? yolo_future.get() : ModelRunResult{};
         const bool yolo_success = yolo_run.success;
         timing.yolo_infer_ms = yolo_run.elapsed_ms;
         timing.models_wall_ms = models_timer.ElapsedMilliseconds();
 
         if (!yolo_success && !patchcore_success) {
-            pImpl->SetLastError("both models failed");
+            pImpl->SetLastError("all enabled models failed");
             return false;
         }
 
         InspectionProfiling::PerformanceTimer postprocess_timer(timing_enabled);
-        Internal::PatchCoreDerived pc = Internal::AnalyzePatchCore(
-            patchcore_result,
-            img_shape,
-            images.patchcore_gray,
-            pImpl->score_threshold_,
-            pImpl->area_threshold_,
-            pImpl->mask_area_threshold_);
+        Internal::PatchCoreDerived pc;
+        if (patchcore_success) {
+            pc = Internal::AnalyzePatchCore(
+                patchcore_result,
+                img_shape,
+                images.patchcore_gray,
+                pImpl->score_threshold_,
+                pImpl->area_threshold_,
+                pImpl->mask_area_threshold_);
+        }
         timing.patchcore_post_ms = postprocess_timer.RestartMilliseconds();
-        Internal::YoloDerived yolo = Internal::AnalyzeYolo(
-            yolo_detections,
-            images.yolo_gray,
-            pImpl->dark_clusters_threshold_);
+        Internal::YoloDerived yolo;
+        if (yolo_success) {
+            yolo = Internal::AnalyzeYolo(
+                yolo_detections,
+                images.yolo_gray,
+                pImpl->dark_clusters_threshold_);
+        }
         timing.yolo_post_ms = postprocess_timer.RestartMilliseconds();
 
         Internal::ComposeOutputWithDefectFilter(

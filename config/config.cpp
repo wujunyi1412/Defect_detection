@@ -60,19 +60,19 @@ bool ValidateColorChannel(int value, const char* name, std::string& err) {
 }
 
 bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
-    if (!fs::exists(out.yolo_model_path)) {
+    if (out.yolo_enabled && !fs::exists(out.yolo_model_path)) {
         err = "yolo_model_path does not exist: " + out.yolo_model_path;
         return false;
     }
-    if (!fs::exists(out.patchcore_model_path)) {
+    if (out.patchcore_enabled && !fs::exists(out.patchcore_model_path)) {
         err = "patchcore_model_path does not exist: " + out.patchcore_model_path;
         return false;
     }
-    if (!fs::exists(out.faiss_index_path)) {
+    if (out.patchcore_enabled && !fs::exists(out.faiss_index_path)) {
         err = "faiss_index_path does not exist: " + out.faiss_index_path;
         return false;
     }
-    if (!fs::exists(out.metadata_path)) {
+    if (out.patchcore_enabled && !fs::exists(out.metadata_path)) {
         err = "metadata_path does not exist: " + out.metadata_path;
         return false;
     }
@@ -125,11 +125,14 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
         return false;
     }
 
+    out.yolo_enabled = GetBoolOr(ini, "yolo", "enabled", out.yolo_enabled);
+    out.patchcore_enabled = GetBoolOr(ini, "patchcore", "enabled", out.patchcore_enabled);
+
     std::vector<std::string> missing_keys;
-    if (!TryGetString(ini, "models", "yolo_model_path", out.yolo_model_path)) missing_keys.push_back("yolo_model_path");
-    if (!TryGetString(ini, "models", "patchcore_model_path", out.patchcore_model_path)) missing_keys.push_back("patchcore_model_path");
-    if (!TryGetString(ini, "models", "faiss_index_path", out.faiss_index_path)) missing_keys.push_back("faiss_index_path");
-    if (!TryGetString(ini, "models", "metadata_path", out.metadata_path)) missing_keys.push_back("metadata_path");
+    if (!TryGetString(ini, "models", "yolo_model_path", out.yolo_model_path) && out.yolo_enabled) missing_keys.push_back("yolo_model_path");
+    if (!TryGetString(ini, "models", "patchcore_model_path", out.patchcore_model_path) && out.patchcore_enabled) missing_keys.push_back("patchcore_model_path");
+    if (!TryGetString(ini, "models", "faiss_index_path", out.faiss_index_path) && out.patchcore_enabled) missing_keys.push_back("faiss_index_path");
+    if (!TryGetString(ini, "models", "metadata_path", out.metadata_path) && out.patchcore_enabled) missing_keys.push_back("metadata_path");
 
     if (!missing_keys.empty()) {
         std::ostringstream oss;
@@ -142,10 +145,10 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
         return false;
     }
 
-    out.yolo_model_path = ResolvePathRelativeToIni(config_path, out.yolo_model_path);
-    out.patchcore_model_path = ResolvePathRelativeToIni(config_path, out.patchcore_model_path);
-    out.faiss_index_path = ResolvePathRelativeToIni(config_path, out.faiss_index_path);
-    out.metadata_path = ResolvePathRelativeToIni(config_path, out.metadata_path);
+    if (!out.yolo_model_path.empty()) out.yolo_model_path = ResolvePathRelativeToIni(config_path, out.yolo_model_path);
+    if (!out.patchcore_model_path.empty()) out.patchcore_model_path = ResolvePathRelativeToIni(config_path, out.patchcore_model_path);
+    if (!out.faiss_index_path.empty()) out.faiss_index_path = ResolvePathRelativeToIni(config_path, out.faiss_index_path);
+    if (!out.metadata_path.empty()) out.metadata_path = ResolvePathRelativeToIni(config_path, out.metadata_path);
 
     out.yolo_score_threshold = GetFloatOr(ini, "yolo", "score_threshold", out.yolo_score_threshold);
     out.yolo_iou_threshold = GetFloatOr(ini, "yolo", "iou_threshold", out.yolo_iou_threshold);

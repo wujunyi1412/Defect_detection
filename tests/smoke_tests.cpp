@@ -70,6 +70,8 @@ int TestFloatOverlayFileIs8Bit() {
 
 int TestConfigDefaults() {
     InspectionConfig::InspectionConfigData cfg;
+    if (AssertTrue(cfg.yolo_enabled, "yolo_enabled default should be true")) return 1;
+    if (AssertTrue(cfg.patchcore_enabled, "patchcore_enabled default should be true")) return 1;
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
     if (AssertTrue(!cfg.draw_defect_mask, "draw_defect_mask default should be false")) return 1;

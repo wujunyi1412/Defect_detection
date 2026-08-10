@@ -26,6 +26,8 @@ struct AbnormalFilterConfig {
 };
 
 struct InspectionConfigData {
+    bool yolo_enabled = true;
+    bool patchcore_enabled = true;
     std::string yolo_model_path;
     std::string patchcore_model_path;
     std::string faiss_index_path;
