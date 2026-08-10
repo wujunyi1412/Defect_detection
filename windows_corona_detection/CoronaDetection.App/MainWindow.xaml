@@ -184,6 +184,9 @@
                                         Click="StartConversion_Click"
                                         Background="{StaticResource PrimaryBrush}" Foreground="White"
                                         BorderThickness="0" Width="110"/>
+                                <CheckBox x:Name="OverwriteConversionFilesCheck"
+                                          Content="覆盖同名 JSON" IsChecked="False"
+                                          VerticalAlignment="Center" Margin="16,0,8,0"/>
                                 <Button x:Name="CancelConversionButton" Content="取消"
                                         Click="CancelConversion_Click" IsEnabled="False" Width="88"/>
                                 <Button x:Name="OpenConversionOutputButton" Content="打开输出目录"

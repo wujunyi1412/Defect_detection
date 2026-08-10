@@ -24,17 +24,21 @@ internal sealed class ResultConversionService
     public async Task<ResultConversionSummary> ConvertAsync(
         string csvPath,
         string outputDirectory,
+        ResultConversionOptions? options = null,
         IProgress<ResultConversionProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         return await Task.Run(
-            () => Convert(csvPath, outputDirectory, progress, cancellationToken),
+            () => Convert(
+                csvPath, outputDirectory, options ?? new ResultConversionOptions(),
+                progress, cancellationToken),
             cancellationToken);
     }
 
     private static ResultConversionSummary Convert(
         string csvPath,
         string outputDirectory,
+        ResultConversionOptions options,
         IProgress<ResultConversionProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -87,6 +91,10 @@ internal sealed class ResultConversionService
                 ParseDouble(record, columns["对比度"], recordIndex, "对比度")));
         }
 
+        string[] outputPaths = groups
+            .Select(group => BuildJsonPath(outputDirectory, group.ImagePath))
+            .ToArray();
+        EnsureOutputPathsAvailable(outputPaths, options.OverwriteExistingFiles);
         Directory.CreateDirectory(outputDirectory);
         var items = new List<ResultConversionItem>(groups.Count);
         int totalDefects = 0;
@@ -100,9 +108,7 @@ internal sealed class ResultConversionService
             (int? width, int? height, string warning) = ReadImageSize(resolvedImagePath);
 
             string imageName = Path.GetFileName(group.ImagePath);
-            string jsonPath = Path.Combine(
-                outputDirectory,
-                Path.GetFileNameWithoutExtension(imageName) + ".json");
+            string jsonPath = outputPaths[index];
             var document = new LabelMeDocument
             {
                 Shapes = group.Defects.Select(ToLabelMeShape).ToList(),
@@ -124,6 +130,29 @@ internal sealed class ResultConversionService
         }
 
         return new ResultConversionSummary(encodingName, groups.Count, totalDefects, items);
+    }
+
+    private static string BuildJsonPath(string outputDirectory, string imagePath) =>
+        Path.Combine(
+            outputDirectory,
+            Path.GetFileNameWithoutExtension(Path.GetFileName(imagePath)) + ".json");
+
+    private static void EnsureOutputPathsAvailable(
+        IReadOnlyList<string> outputPaths,
+        bool overwriteExistingFiles)
+    {
+        if (overwriteExistingFiles) return;
+
+        string[] conflicts = outputPaths
+            .Where(File.Exists)
+            .Concat(outputPaths
+                .GroupBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (conflicts.Length > 0)
+            throw new OutputFileConflictException(conflicts);
     }
 
     private static LabelMeShape ToLabelMeShape(DefectRecord defect) => new()
@@ -269,6 +298,14 @@ public sealed record ResultConversionItem(
     int? ImageHeight,
     string JsonPath,
     string Warning);
+
+internal sealed record ResultConversionOptions(bool OverwriteExistingFiles = false);
+
+internal sealed class OutputFileConflictException(IReadOnlyList<string> conflictingPaths)
+    : IOException("输出目录中存在同名 JSON 文件。")
+{
+    public IReadOnlyList<string> ConflictingPaths { get; } = conflictingPaths;
+}
 
 internal sealed record ResultConversionProgress(
     int Completed,

@@ -83,7 +83,11 @@ public partial class MainWindow
         try
         {
             ResultConversionSummary summary = await _resultConversionService.ConvertAsync(
-                csvPath, outputDirectory, progress, _resultConversionCancellation.Token);
+                csvPath,
+                outputDirectory,
+                new ResultConversionOptions(OverwriteConversionFilesCheck.IsChecked == true),
+                progress,
+                _resultConversionCancellation.Token);
             ConversionProgress.Maximum = Math.Max(1, summary.ImageCount);
             ConversionProgress.Value = summary.ImageCount;
             ConversionProgressText.Text = $"{summary.ImageCount} / {summary.ImageCount}（100%）";
@@ -93,6 +97,22 @@ public partial class MainWindow
         catch (OperationCanceledException)
         {
             ConversionStatusText.Text = $"转换已取消，已完成 {ConversionResults.Count} 张图片";
+        }
+        catch (OutputFileConflictException ex)
+        {
+            ConversionStatusText.Text = "未执行：发现同名 JSON 文件";
+            string preview = string.Join(Environment.NewLine, ex.ConflictingPaths.Take(8));
+            string remaining = ex.ConflictingPaths.Count > 8
+                ? $"{Environment.NewLine}……另有 {ex.ConflictingPaths.Count - 8} 个冲突文件"
+                : string.Empty;
+            MessageBox.Show(
+                this,
+                $"发现 {ex.ConflictingPaths.Count} 个同名 JSON，转换未执行：{Environment.NewLine}{Environment.NewLine}" +
+                preview + remaining +
+                $"{Environment.NewLine}{Environment.NewLine}如需覆盖，请先勾选“覆盖同名 JSON”，然后重新开始转换。",
+                "输出文件冲突",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
@@ -134,6 +154,7 @@ public partial class MainWindow
         BrowseConversionCsvButton.IsEnabled = !busy;
         BrowseConversionOutputButton.IsEnabled = !busy;
         OpenConversionOutputButton.IsEnabled = !busy;
+        OverwriteConversionFilesCheck.IsEnabled = !busy;
         ConversionStatusText.Text = status;
     }
 }
