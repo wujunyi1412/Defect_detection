@@ -45,10 +45,12 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
-        if (_busy)
+        if (_busy || _resultConversionBusy)
         {
             _cancellation?.Cancel();
-            TaskStatusText.Text = "正在取消，请稍候…";
+            _resultConversionCancellation?.Cancel();
+            if (_busy) TaskStatusText.Text = "正在取消，请稍候…";
+            if (_resultConversionBusy) ConversionStatusText.Text = "正在取消，请稍候…";
             e.Cancel = true;
             return;
         }
