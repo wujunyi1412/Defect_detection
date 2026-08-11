@@ -65,7 +65,7 @@ internal sealed class ResultAnalysisService
             Path.Combine(outputDirectory, "confusion_matrix.csv")
         ];
         string[] visualizationPaths = images.Keys
-            .Select(prefix => Path.Combine(visualizationDirectory, prefix + "_errors.png"))
+            .Select(prefix => Path.Combine(visualizationDirectory, prefix + ".png"))
             .ToArray();
         EnsureOutputsAvailable(
             reportPaths.Concat(visualizationPaths), options.OverwriteOutputs);
@@ -77,9 +77,11 @@ internal sealed class ResultAnalysisService
             predictions.TryGetValue(prefix, out string? predictionPath);
             groundTruth.TryGetValue(prefix, out string? groundTruthPath);
             AnnotationReadResult gt = LabelMeAnnotationReader.Read(groundTruthPath);
-            AnnotationReadResult pred = LabelMeAnnotationReader.Read(predictionPath);
+            AnnotationReadResult predRaw = LabelMeAnnotationReader.Read(predictionPath);
+            IReadOnlyList<AnnotationBox> normalizedPredictions =
+                (options.PredictionRules ?? new PredictionLabelRules()).Apply(predRaw.Annotations);
             IReadOnlyList<AnnotationMatch> matches = AnnotationMatcher.Match(
-                gt.Annotations, pred.Annotations, options.IouThreshold);
+                gt.Annotations, normalizedPredictions, options.IouThreshold);
 
             var errors = new List<AnalysisError>();
             foreach (AnnotationMatch match in matches.Where(match => !match.ClassCorrect))
@@ -103,7 +105,7 @@ internal sealed class ResultAnalysisService
                     0.0,
                     $"{annotation.Label} 漏检"));
             }
-            foreach (AnnotationBox annotation in pred.Annotations.Where(
+            foreach (AnnotationBox annotation in normalizedPredictions.Where(
                          annotation => !matches.Any(match => ReferenceEquals(match.Prediction, annotation))))
             {
                 errors.Add(new AnalysisError(
@@ -116,7 +118,7 @@ internal sealed class ResultAnalysisService
             }
 
             var warnings = gt.Warnings.Select(warning => "GT: " + warning)
-                .Concat(pred.Warnings.Select(warning => "预测: " + warning))
+                .Concat(predRaw.Warnings.Select(warning => "预测: " + warning))
                 .ToList();
             if (groundTruthPath is null) warnings.Add("缺少 GT JSON，按空标注处理");
             if (predictionPath is null) warnings.Add("缺少预测 JSON，按空标注处理");
@@ -125,7 +127,7 @@ internal sealed class ResultAnalysisService
                 imagePath,
                 Path.GetFileName(imagePath),
                 gt.Annotations,
-                pred.Annotations,
+                normalizedPredictions,
                 matches,
                 errors,
                 warnings));
@@ -156,7 +158,7 @@ internal sealed class ResultAnalysisService
             if (image.Errors.Count > 0)
             {
                 visualizationPath = Path.Combine(
-                    visualizationDirectory, image.Prefix + "_errors.png");
+                    visualizationDirectory, image.Prefix + ".png");
                 AnalysisOverlayRenderer.Render(
                     image.ImagePath,
                     visualizationPath,
@@ -184,7 +186,7 @@ internal sealed class ResultAnalysisService
             progress?.Report(new ResultAnalysisProgress(index + 1, analyzedImages.Count, row));
         }
 
-        WriteReports(outputDirectory, analyzedImages, rows, options.OverwriteOutputs);
+        WriteReports(outputDirectory, analyzedImages, rows, options);
         int totalTp = rows.Sum(row => row.TruePositiveCount);
         int totalMissed = rows.Sum(row => row.MissedCount);
         int totalFalsePositive = rows.Sum(row => row.FalsePositiveCount);
@@ -266,13 +268,13 @@ internal sealed class ResultAnalysisService
         string outputDirectory,
         IReadOnlyList<AnalyzedImage> images,
         IReadOnlyList<AnalysisImageRow> rows,
-        bool overwrite)
+        ResultAnalysisOptions options)
     {
-        WriteImageSummary(Path.Combine(outputDirectory, "image_summary.csv"), rows, overwrite);
-        WriteErrorDetails(Path.Combine(outputDirectory, "error_details.csv"), images, overwrite);
-        WriteOverallMetrics(Path.Combine(outputDirectory, "overall_metrics.csv"), images, rows, overwrite);
-        WriteClassMetrics(Path.Combine(outputDirectory, "class_metrics.csv"), images, overwrite);
-        WriteConfusionMatrix(Path.Combine(outputDirectory, "confusion_matrix.csv"), images, overwrite);
+        WriteImageSummary(Path.Combine(outputDirectory, "image_summary.csv"), rows, options.OverwriteOutputs);
+        WriteErrorDetails(Path.Combine(outputDirectory, "error_details.csv"), images, options.OverwriteOutputs);
+        WriteOverallMetrics(Path.Combine(outputDirectory, "overall_metrics.csv"), images, rows, options);
+        WriteClassMetrics(Path.Combine(outputDirectory, "class_metrics.csv"), images, options.OverwriteOutputs);
+        WriteConfusionMatrix(Path.Combine(outputDirectory, "confusion_matrix.csv"), images, options.OverwriteOutputs);
     }
 
     private static void WriteImageSummary(string path, IReadOnlyList<AnalysisImageRow> rows, bool overwrite)
@@ -318,7 +320,7 @@ internal sealed class ResultAnalysisService
         string path,
         IReadOnlyList<AnalyzedImage> images,
         IReadOnlyList<AnalysisImageRow> rows,
-        bool overwrite)
+        ResultAnalysisOptions options)
     {
         int gtCount = images.Sum(image => image.GroundTruth.Count);
         int predCount = images.Sum(image => image.Predictions.Count);
@@ -333,6 +335,18 @@ internal sealed class ResultAnalysisService
             ? images.SelectMany(image => image.Matches).Average(match => match.Iou)
             : 0.0;
         var csv = CsvBuilder.Create("指标", "值", "说明");
+        PredictionLabelRules rules = options.PredictionRules ?? new PredictionLabelRules();
+        csv.Add("IoU匹配阈值", F(options.IouThreshold), "预测框与GT外接矩形的一对一匹配阈值");
+        csv.Add(
+            "忽略的预测标签",
+            rules.IgnoredLabels.Count == 0 ? "无" : string.Join("; ", rules.IgnoredLabels),
+            "这些预测标签在匹配和指标统计前被移除");
+        csv.Add(
+            "预测标签映射",
+            rules.LabelMappings.Count == 0
+                ? "无"
+                : string.Join("; ", rules.LabelMappings.Select(pair => $"{pair.Key}->{pair.Value}")),
+            "映射在匹配和指标统计前执行");
         csv.Add("图片数", rows.Count, "以原始图片文件夹为准");
         csv.Add("错误图片数", rows.Count(row => row.MissedCount + row.FalsePositiveCount + row.MisclassifiedCount > 0), "存在漏检、误检或类别错误的图片");
         csv.Add("GT实例数", gtCount, "GT polygon 外接矩形数量");
@@ -347,7 +361,7 @@ internal sealed class ResultAnalysisService
         csv.Add("定位召回率", F(Ratio(localized, gtCount)), "IoU达标的匹配数/GT数，不考虑类别");
         csv.Add("匹配后分类正确率", F(Ratio(tp, localized)), "类别正确匹配数/全部定位匹配数");
         csv.Add("平均匹配IoU", F(meanIou), "全部IoU达标匹配的平均值");
-        csv.Write(path, overwrite);
+        csv.Write(path, options.OverwriteOutputs);
     }
 
     private static void WriteClassMetrics(string path, IReadOnlyList<AnalyzedImage> images, bool overwrite)

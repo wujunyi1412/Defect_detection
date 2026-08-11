@@ -81,7 +81,10 @@ public partial class MainWindow
                 new ResultAnalysisOptions(
                     iouThreshold,
                     RecursiveAnalysisCheck.IsChecked == true,
-                    OverwriteAnalysisCheck.IsChecked == true),
+                    OverwriteAnalysisCheck.IsChecked == true,
+                    PredictionLabelRules.FromUiOptions(
+                        IgnorePredictionAbnormalCheck.IsChecked == true,
+                        MapDarkClustersToStainCheck.IsChecked == true)),
                 progress,
                 _analysisCancellation.Token);
             AnalysisProgress.Maximum = Math.Max(1, summary.ImageCount);
@@ -205,6 +208,8 @@ public partial class MainWindow
         AnalysisIouThresholdText.IsEnabled = !busy;
         RecursiveAnalysisCheck.IsEnabled = !busy;
         OverwriteAnalysisCheck.IsEnabled = !busy;
+        IgnorePredictionAbnormalCheck.IsEnabled = !busy;
+        MapDarkClustersToStainCheck.IsEnabled = !busy;
         OpenAnalysisOutputButton.IsEnabled = !busy;
         StartButton.IsEnabled = !busy && !_busy;
         StartConversionButton.IsEnabled = !busy && !_resultConversionBusy;

@@ -344,6 +344,7 @@
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="48"/>
+                                <RowDefinition Height="Auto" MinHeight="44"/>
                             </Grid.RowDefinitions>
 
                             <TextBlock Text="原始图片文件夹" VerticalAlignment="Center"/>
@@ -366,8 +367,21 @@
                             <Button x:Name="BrowseAnalysisOutputButton" Grid.Row="3" Grid.Column="2"
                                     Content="选择文件夹…" Click="BrowseAnalysisOutput_Click"/>
 
-                            <TextBlock Grid.Row="4" Text="匹配与执行" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="4" Text="预测标签规则" VerticalAlignment="Center"/>
                             <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                                        Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox x:Name="IgnorePredictionAbnormalCheck"
+                                          Content="忽略预测 Abnormal" IsChecked="False"
+                                          VerticalAlignment="Center" Margin="0,0,28,0"/>
+                                <CheckBox x:Name="MapDarkClustersToStainCheck"
+                                          Content="预测 DarkClusters 按 Stain 统计" IsChecked="False"
+                                          VerticalAlignment="Center" Margin="0,0,28,0"/>
+                                <TextBlock Text="规则仅作用于预测标签，并记录在 overall_metrics.csv"
+                                           Foreground="#687384" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="5" Text="匹配与执行" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2"
                                         Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="IoU 阈值" VerticalAlignment="Center"/>
                                 <TextBox x:Name="AnalysisIouThresholdText" Text="0.5" Width="62"

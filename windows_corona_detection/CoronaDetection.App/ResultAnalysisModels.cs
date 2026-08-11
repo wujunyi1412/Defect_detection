@@ -65,7 +65,43 @@ public sealed record AnalysisImageRow(
 internal sealed record ResultAnalysisOptions(
     double IouThreshold = 0.5,
     bool Recursive = true,
-    bool OverwriteOutputs = false);
+    bool OverwriteOutputs = false,
+    PredictionLabelRules? PredictionRules = null);
+
+internal sealed class PredictionLabelRules(
+    IEnumerable<string>? ignoredLabels = null,
+    IEnumerable<KeyValuePair<string, string>>? labelMappings = null)
+{
+    private readonly HashSet<string> _ignoredLabels =
+        (ignoredLabels ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _labelMappings =
+        (labelMappings ?? []).ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.OrdinalIgnoreCase);
+
+    public IReadOnlyCollection<string> IgnoredLabels => _ignoredLabels;
+    public IReadOnlyDictionary<string, string> LabelMappings => _labelMappings;
+
+    public IReadOnlyList<AnnotationBox> Apply(IReadOnlyList<AnnotationBox> predictions) =>
+        predictions
+            .Where(prediction => !_ignoredLabels.Contains(prediction.Label))
+            .Select(prediction => _labelMappings.TryGetValue(prediction.Label, out string? mapped)
+                ? prediction with { Label = mapped }
+                : prediction)
+            .ToList();
+
+    public static PredictionLabelRules FromUiOptions(
+        bool ignoreAbnormal,
+        bool mapDarkClustersToStain)
+    {
+        string[] ignored = ignoreAbnormal ? ["Abnormal"] : [];
+        KeyValuePair<string, string>[] mappings = mapDarkClustersToStain
+            ? [new KeyValuePair<string, string>("DarkClusters", "Stain")]
+            : [];
+        return new PredictionLabelRules(ignored, mappings);
+    }
+}
 
 internal sealed record ResultAnalysisProgress(
     int Completed,
