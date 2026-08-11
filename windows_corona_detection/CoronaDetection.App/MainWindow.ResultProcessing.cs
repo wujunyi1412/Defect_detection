@@ -44,7 +44,7 @@ public partial class MainWindow
 
     private async void StartConversion_Click(object sender, RoutedEventArgs e)
     {
-        if (_resultConversionBusy) return;
+        if (_resultConversionBusy || _annotationCompletionBusy || _busy || _analysisBusy) return;
         string csvPath = ConversionCsvPathText.Text.Trim();
         string outputDirectory = ConversionOutputPathText.Text.Trim();
         if (!File.Exists(csvPath))
@@ -155,6 +155,8 @@ public partial class MainWindow
         BrowseConversionOutputButton.IsEnabled = !busy;
         OpenConversionOutputButton.IsEnabled = !busy;
         OverwriteConversionFilesCheck.IsEnabled = !busy;
+        StartCompletionButton.IsEnabled = !busy && !_annotationCompletionBusy;
+        StartAnalysisButton.IsEnabled = !busy && !_analysisBusy;
         ConversionStatusText.Text = status;
     }
 }

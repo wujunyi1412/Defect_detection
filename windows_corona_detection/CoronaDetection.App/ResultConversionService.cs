@@ -1,10 +1,6 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Windows.Media.Imaging;
 
 namespace CoronaDetection;
 
@@ -14,12 +10,6 @@ internal sealed class ResultConversionService
     [
         "原图路径", "缺陷序号", "类别", "面积", "X", "Y", "宽", "高", "对比度"
     ];
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
 
     public async Task<ResultConversionSummary> ConvertAsync(
         string csvPath,
@@ -105,26 +95,19 @@ internal sealed class ResultConversionService
             string resolvedImagePath = Path.IsPathRooted(group.ImagePath)
                 ? group.ImagePath
                 : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(csvPath)!, group.ImagePath));
-            (int? width, int? height, string warning) = ReadImageSize(resolvedImagePath);
-
             string imageName = Path.GetFileName(group.ImagePath);
             string jsonPath = outputPaths[index];
-            var document = new LabelMeDocument
-            {
-                Shapes = group.Defects.Select(ToLabelMeShape).ToList(),
-                ImagePath = imageName,
-                ImageHeight = height,
-                ImageWidth = width
-            };
-            File.WriteAllText(
+            ImageMetadata metadata = LabelMeJsonWriter.Write(
+                resolvedImagePath,
+                imageName,
                 jsonPath,
-                JsonSerializer.Serialize(document, JsonOptions),
-                new UTF8Encoding(false));
+                group.Defects.Select(ToLabelMeShape).ToList(),
+                options.OverwriteExistingFiles);
 
             totalDefects += group.Defects.Count;
             var item = new ResultConversionItem(
                 index + 1, imageName, group.ImagePath, group.Defects.Count,
-                width, height, jsonPath, warning);
+                metadata.Width, metadata.Height, jsonPath, metadata.Warning);
             items.Add(item);
             progress?.Report(new ResultConversionProgress(index + 1, groups.Count, item));
         }
@@ -155,18 +138,15 @@ internal sealed class ResultConversionService
             throw new OutputFileConflictException(conflicts);
     }
 
-    private static LabelMeShape ToLabelMeShape(DefectRecord defect) => new()
-    {
-        Label = defect.ClassName,
-        Points =
+    private static LabelMeShapeData ToLabelMeShape(DefectRecord defect) => new(
+        defect.ClassName,
         [
             [defect.X, defect.Y],
             [defect.X + defect.Width, defect.Y + defect.Height]
         ],
-        Description = string.Create(
+        string.Create(
             CultureInfo.InvariantCulture,
-            $"defect_id={defect.Id}; area={defect.Area}; contrast={defect.Contrast}")
-    };
+            $"defect_id={defect.Id}; area={defect.Area}; contrast={defect.Contrast}"));
 
     private static string ReadCsvText(string path, out string encodingName)
     {
@@ -204,23 +184,6 @@ internal sealed class ResultConversionService
         throw new InvalidDataException("无法识别 CSV 编码（支持 UTF-8、GBK、GB18030）。");
     }
 
-    private static (int? Width, int? Height, string Warning) ReadImageSize(string imagePath)
-    {
-        if (!File.Exists(imagePath))
-            return (null, null, "原图不存在，JSON 中尺寸已留空");
-        try
-        {
-            using var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            BitmapFrame frame = BitmapDecoder.Create(
-                stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
-            return (frame.PixelWidth, frame.PixelHeight, string.Empty);
-        }
-        catch (Exception ex)
-        {
-            return (null, null, "无法读取原图尺寸：" + ex.Message);
-        }
-    }
-
     private static string GetValue(string[] record, int column, int recordIndex, string columnName)
     {
         if (column >= record.Length)
@@ -254,39 +217,6 @@ internal sealed class ResultConversionService
         int Id, string ClassName, double Area, double X, double Y,
         double Width, double Height, double Contrast);
 
-    private sealed class LabelMeDocument
-    {
-        [JsonPropertyName("version")]
-        public string Version { get; init; } = "5.0.1";
-        [JsonPropertyName("flags")]
-        public Dictionary<string, object> Flags { get; init; } = [];
-        [JsonPropertyName("shapes")]
-        public required List<LabelMeShape> Shapes { get; init; }
-        [JsonPropertyName("imagePath")]
-        public required string ImagePath { get; init; }
-        [JsonPropertyName("imageData")]
-        public string? ImageData { get; init; }
-        [JsonPropertyName("imageHeight")]
-        public int? ImageHeight { get; init; }
-        [JsonPropertyName("imageWidth")]
-        public int? ImageWidth { get; init; }
-    }
-
-    private sealed class LabelMeShape
-    {
-        [JsonPropertyName("label")]
-        public required string Label { get; init; }
-        [JsonPropertyName("points")]
-        public required List<List<double>> Points { get; init; }
-        [JsonPropertyName("group_id")]
-        public int? GroupId { get; init; }
-        [JsonPropertyName("description")]
-        public required string Description { get; init; }
-        [JsonPropertyName("shape_type")]
-        public string ShapeType { get; init; } = "rectangle";
-        [JsonPropertyName("flags")]
-        public Dictionary<string, object> Flags { get; init; } = [];
-    }
 }
 
 public sealed record ResultConversionItem(

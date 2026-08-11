@@ -145,7 +145,9 @@
             </TabItem>
 
             <TabItem Header="结果处理">
-                <Grid Margin="10">
+                <TabControl Margin="6">
+                    <TabItem Header="CSV 转 JSON">
+                <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="62"/>
@@ -229,18 +231,202 @@
                         </DataGrid>
                     </GroupBox>
                 </Grid>
+                    </TabItem>
+
+                    <TabItem Header="补齐空标注">
+                        <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="62"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <GroupBox Header="按图片文件名补齐空 LabelMe JSON">
+                                <Grid Margin="4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="155"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="145"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" MinHeight="42"/>
+                                        <RowDefinition Height="Auto" MinHeight="42"/>
+                                        <RowDefinition Height="Auto" MinHeight="46"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Text="原始图片文件夹" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="CompletionImagePathText" Grid.Column="1"
+                                             Margin="0,3,8,3"/>
+                                    <Button x:Name="BrowseCompletionImageButton" Grid.Column="2"
+                                            Content="选择文件夹…" Click="BrowseCompletionImage_Click"/>
+
+                                    <TextBlock Grid.Row="1" Text="LabelMe JSON 文件夹" VerticalAlignment="Center"
+                                               TextWrapping="NoWrap"/>
+                                    <TextBox x:Name="CompletionJsonPathText" Grid.Row="1" Grid.Column="1"
+                                             Margin="0,3,8,3"/>
+                                    <Button x:Name="BrowseCompletionJsonButton" Grid.Row="1" Grid.Column="2"
+                                            Content="选择文件夹…" Click="BrowseCompletionJson_Click"/>
+
+                                    <TextBlock Grid.Row="2" Text="执行" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                                Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button x:Name="StartCompletionButton" Content="扫描并补齐"
+                                                Click="StartCompletion_Click"
+                                                Background="{StaticResource PrimaryBrush}" Foreground="White"
+                                                BorderThickness="0" Width="110"/>
+                                        <CheckBox x:Name="RecursiveCompletionCheck"
+                                                  Content="包含子文件夹" IsChecked="True"
+                                                  VerticalAlignment="Center" Margin="16,0,8,0"/>
+                                        <Button x:Name="CancelCompletionButton" Content="取消"
+                                                Click="CancelCompletion_Click" IsEnabled="False" Width="88"/>
+                                        <Button x:Name="OpenCompletionOutputButton" Content="打开 JSON 文件夹"
+                                                Click="OpenCompletionOutput_Click" Width="150"/>
+                                    </StackPanel>
+                                </Grid>
+                            </GroupBox>
+
+                            <Grid Grid.Row="1" Margin="2,5,2,6">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="26"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="280"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="CompletionStatusText"
+                                           Text="选择图片文件夹和 JSON 文件夹；按不含扩展名的文件名精确匹配"
+                                           Grid.ColumnSpan="2" Foreground="#3F4752"/>
+                                <ProgressBar x:Name="CompletionProgress" Grid.Row="1" Height="19"
+                                             Minimum="0" Maximum="1"/>
+                                <TextBlock x:Name="CompletionProgressText" Grid.Row="1" Grid.Column="1"
+                                           Text="等待扫描" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <GroupBox Grid.Row="2" Header="本次补齐的空标注">
+                                <DataGrid x:Name="CompletionResultGrid"
+                                          ItemsSource="{Binding AnnotationCompletionResults}"
+                                          AutoGenerateColumns="False" IsReadOnly="True"
+                                          SelectionMode="Single" SelectionUnit="FullRow">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="55"/>
+                                        <DataGridTextColumn Header="图片名称" Binding="{Binding ImageName}" Width="210"/>
+                                        <DataGridTextColumn Header="图片宽" Binding="{Binding ImageWidth}" Width="75"/>
+                                        <DataGridTextColumn Header="图片高" Binding="{Binding ImageHeight}" Width="75"/>
+                                        <DataGridTextColumn Header="空标注 JSON 路径" Binding="{Binding JsonPath}" Width="*"/>
+                                        <DataGridTextColumn Header="提示" Binding="{Binding Warning}" Width="260"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </GroupBox>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
             </TabItem>
 
             <TabItem Header="结果分析">
                 <Grid Margin="10">
-                    <GroupBox Header="结果对比分析">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <TextBlock Text="结果分析功能将在下一阶段接入"
-                                       FontSize="20" FontWeight="SemiBold"
-                                       Foreground="#3F4752" HorizontalAlignment="Center"/>
-                            <TextBlock Text="这里将读取结果处理生成的 LabelMe JSON，并与标准标注进行对比。"
-                                       Margin="0,12,0,0" Foreground="#687384"/>
-                        </StackPanel>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="62"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <GroupBox Header="预测结果与 GT 对比">
+                        <Grid Margin="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="125"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="145"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition Height="Auto" MinHeight="48"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="原始图片文件夹" VerticalAlignment="Center"/>
+                            <TextBox x:Name="AnalysisImagePathText" Grid.Column="1" Margin="0,3,8,3"/>
+                            <Button x:Name="BrowseAnalysisImageButton" Grid.Column="2"
+                                    Content="选择文件夹…" Click="BrowseAnalysisImage_Click"/>
+
+                            <TextBlock Grid.Row="1" Text="预测 JSON 文件夹" VerticalAlignment="Center"/>
+                            <TextBox x:Name="AnalysisPredictionPathText" Grid.Row="1" Grid.Column="1" Margin="0,3,8,3"/>
+                            <Button x:Name="BrowseAnalysisPredictionButton" Grid.Row="1" Grid.Column="2"
+                                    Content="选择文件夹…" Click="BrowseAnalysisPrediction_Click"/>
+
+                            <TextBlock Grid.Row="2" Text="GT JSON 文件夹" VerticalAlignment="Center"/>
+                            <TextBox x:Name="AnalysisGroundTruthPathText" Grid.Row="2" Grid.Column="1" Margin="0,3,8,3"/>
+                            <Button x:Name="BrowseAnalysisGroundTruthButton" Grid.Row="2" Grid.Column="2"
+                                    Content="选择文件夹…" Click="BrowseAnalysisGroundTruth_Click"/>
+
+                            <TextBlock Grid.Row="3" Text="分析输出文件夹" VerticalAlignment="Center"/>
+                            <TextBox x:Name="AnalysisOutputPathText" Grid.Row="3" Grid.Column="1" Margin="0,3,8,3"/>
+                            <Button x:Name="BrowseAnalysisOutputButton" Grid.Row="3" Grid.Column="2"
+                                    Content="选择文件夹…" Click="BrowseAnalysisOutput_Click"/>
+
+                            <TextBlock Grid.Row="4" Text="匹配与执行" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                                        Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="IoU 阈值" VerticalAlignment="Center"/>
+                                <TextBox x:Name="AnalysisIouThresholdText" Text="0.5" Width="62"
+                                         Margin="8,0,18,0" VerticalContentAlignment="Center"/>
+                                <CheckBox x:Name="RecursiveAnalysisCheck" Content="包含子文件夹"
+                                          IsChecked="True" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                                <CheckBox x:Name="OverwriteAnalysisCheck" Content="覆盖已有分析结果"
+                                          IsChecked="False" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                                <Button x:Name="StartAnalysisButton" Content="开始分析"
+                                        Click="StartAnalysis_Click"
+                                        Background="{StaticResource PrimaryBrush}" Foreground="White"
+                                        BorderThickness="0" Width="105"/>
+                                <Button x:Name="CancelAnalysisButton" Content="取消"
+                                        Click="CancelAnalysis_Click" IsEnabled="False" Width="80"/>
+                                <Button x:Name="OpenAnalysisOutputButton" Content="打开输出文件夹"
+                                        Click="OpenAnalysisOutput_Click" Width="140"/>
+                            </StackPanel>
+                        </Grid>
+                    </GroupBox>
+
+                    <Grid Grid.Row="1" Margin="2,5,2,6">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="26"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="300"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="AnalysisStatusText"
+                                   Text="GT polygon 将转换为轴对齐最小外接矩形后进行一对一 IoU 匹配"
+                                   Grid.ColumnSpan="2" Foreground="#3F4752"/>
+                        <ProgressBar x:Name="AnalysisProgress" Grid.Row="1" Height="19"
+                                     Minimum="0" Maximum="1"/>
+                        <TextBlock x:Name="AnalysisProgressText" Grid.Row="1" Grid.Column="1"
+                                   Text="等待分析" TextAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <GroupBox Grid.Row="2" Header="逐图分析结果">
+                        <DataGrid x:Name="AnalysisResultGrid"
+                                  ItemsSource="{Binding AnalysisResults}"
+                                  AutoGenerateColumns="False" IsReadOnly="True"
+                                  SelectionMode="Single" SelectionUnit="FullRow">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="50"/>
+                                <DataGridTextColumn Header="图片名称" Binding="{Binding ImageName}" Width="180"/>
+                                <DataGridTextColumn Header="GT" Binding="{Binding GroundTruthCount}" Width="50"/>
+                                <DataGridTextColumn Header="预测" Binding="{Binding PredictionCount}" Width="50"/>
+                                <DataGridTextColumn Header="TP" Binding="{Binding TruePositiveCount}" Width="50"/>
+                                <DataGridTextColumn Header="漏检" Binding="{Binding MissedCount}" Width="55"/>
+                                <DataGridTextColumn Header="误检" Binding="{Binding FalsePositiveCount}" Width="55"/>
+                                <DataGridTextColumn Header="类别错误" Binding="{Binding MisclassifiedCount}" Width="70"/>
+                                <DataGridTextColumn Header="Precision" Binding="{Binding Precision, StringFormat=0.000}" Width="75"/>
+                                <DataGridTextColumn Header="Recall" Binding="{Binding Recall, StringFormat=0.000}" Width="70"/>
+                                <DataGridTextColumn Header="F1" Binding="{Binding F1, StringFormat=0.000}" Width="65"/>
+                                <DataGridTextColumn Header="Mean IoU" Binding="{Binding MeanIou, StringFormat=0.000}" Width="78"/>
+                                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
                     </GroupBox>
                 </Grid>
             </TabItem>

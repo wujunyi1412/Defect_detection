@@ -45,12 +45,16 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
-        if (_busy || _resultConversionBusy)
+        if (_busy || _resultConversionBusy || _annotationCompletionBusy || _analysisBusy)
         {
             _cancellation?.Cancel();
             _resultConversionCancellation?.Cancel();
+            _annotationCompletionCancellation?.Cancel();
+            _analysisCancellation?.Cancel();
             if (_busy) TaskStatusText.Text = "正在取消，请稍候…";
             if (_resultConversionBusy) ConversionStatusText.Text = "正在取消，请稍候…";
+            if (_annotationCompletionBusy) CompletionStatusText.Text = "正在取消，请稍候…";
+            if (_analysisBusy) AnalysisStatusText.Text = "正在取消，请稍候…";
             e.Cancel = true;
             return;
         }
@@ -201,7 +205,7 @@ public partial class MainWindow : Window
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy) return;
+        if (_busy || _resultConversionBusy || _annotationCompletionBusy || _analysisBusy) return;
         List<string> files;
         string inputRoot = InputPathText.Text.Trim();
         string outputRoot = OutputPathText.Text.Trim();
@@ -424,6 +428,9 @@ public partial class MainWindow : Window
         SaveConfigButton.IsEnabled = !busy;
         RestartModelButton.IsEnabled = !busy;
         BrowseInputButton.IsEnabled = !busy;
+        StartConversionButton.IsEnabled = !busy && !_resultConversionBusy;
+        StartCompletionButton.IsEnabled = !busy && !_annotationCompletionBusy;
+        StartAnalysisButton.IsEnabled = !busy && !_analysisBusy;
         TaskStatusText.Text = status;
         if (!busy) UpdateEngineStatus();
     }
