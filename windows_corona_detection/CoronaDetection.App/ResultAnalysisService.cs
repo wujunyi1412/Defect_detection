@@ -80,8 +80,11 @@ internal sealed class ResultAnalysisService
             AnnotationReadResult predRaw = LabelMeAnnotationReader.Read(predictionPath);
             IReadOnlyList<AnnotationBox> normalizedPredictions =
                 (options.PredictionRules ?? new PredictionLabelRules()).Apply(predRaw.Annotations);
-            IReadOnlyList<AnnotationMatch> matches = AnnotationMatcher.Match(
+            IReadOnlyList<AnnotationMatch> geometricMatches = AnnotationMatcher.Match(
                 gt.Annotations, normalizedPredictions, options.IouThreshold);
+            IReadOnlyList<AnnotationMatch> matches = options.EvaluateByClass
+                ? geometricMatches
+                : geometricMatches.Select(match => match with { ClassCorrect = true }).ToList();
 
             var errors = new List<AnalysisError>();
             foreach (AnnotationMatch match in matches.Where(match => !match.ClassCorrect))
@@ -273,8 +276,8 @@ internal sealed class ResultAnalysisService
         WriteImageSummary(Path.Combine(outputDirectory, "image_summary.csv"), rows, options.OverwriteOutputs);
         WriteErrorDetails(Path.Combine(outputDirectory, "error_details.csv"), images, options.OverwriteOutputs);
         WriteOverallMetrics(Path.Combine(outputDirectory, "overall_metrics.csv"), images, rows, options);
-        WriteClassMetrics(Path.Combine(outputDirectory, "class_metrics.csv"), images, options.OverwriteOutputs);
-        WriteConfusionMatrix(Path.Combine(outputDirectory, "confusion_matrix.csv"), images, options.OverwriteOutputs);
+        WriteClassMetrics(Path.Combine(outputDirectory, "class_metrics.csv"), images, options);
+        WriteConfusionMatrix(Path.Combine(outputDirectory, "confusion_matrix.csv"), images, options);
     }
 
     private static void WriteImageSummary(string path, IReadOnlyList<AnalysisImageRow> rows, bool overwrite)
@@ -338,6 +341,12 @@ internal sealed class ResultAnalysisService
         PredictionLabelRules rules = options.PredictionRules ?? new PredictionLabelRules();
         csv.Add("IoU匹配阈值", F(options.IouThreshold), "预测框与GT外接矩形的一对一匹配阈值");
         csv.Add(
+            "统计模式",
+            options.EvaluateByClass ? "按类别统计" : "仅统计定位",
+            options.EvaluateByClass
+                ? "IoU达标但类别不同计为类别错误"
+                : "任何IoU达标匹配均计为TP，不判断类别");
+        csv.Add(
             "忽略的预测标签",
             rules.IgnoredLabels.Count == 0 ? "无" : string.Join("; ", rules.IgnoredLabels),
             "这些预测标签在匹配和指标统计前被移除");
@@ -364,8 +373,29 @@ internal sealed class ResultAnalysisService
         csv.Write(path, options.OverwriteOutputs);
     }
 
-    private static void WriteClassMetrics(string path, IReadOnlyList<AnalyzedImage> images, bool overwrite)
+    private static void WriteClassMetrics(
+        string path,
+        IReadOnlyList<AnalyzedImage> images,
+        ResultAnalysisOptions options)
     {
+        if (!options.EvaluateByClass)
+        {
+            int gt = images.Sum(image => image.GroundTruth.Count);
+            int pred = images.Sum(image => image.Predictions.Count);
+            AnnotationMatch[] matches = images.SelectMany(image => image.Matches).ToArray();
+            int tp = matches.Length;
+            double precision = Ratio(tp, pred);
+            double recall = Ratio(tp, gt);
+            var combined = CsvBuilder.Create(
+                "类别", "GT数", "预测数", "TP", "FN", "FP", "Precision", "Recall", "F1", "平均正确匹配IoU");
+            combined.Add(
+                "<全部类别>", gt, pred, tp, gt - tp, pred - tp,
+                F(precision), F(recall), F(F1(precision, recall)),
+                F(matches.Length == 0 ? 0.0 : matches.Average(match => match.Iou)));
+            combined.Write(path, options.OverwriteOutputs);
+            return;
+        }
+
         string[] classes = images
             .SelectMany(image => image.GroundTruth.Concat(image.Predictions))
             .Select(annotation => annotation.Label)
@@ -389,11 +419,26 @@ internal sealed class ResultAnalysisService
                 F(precision), F(recall), F(F1(precision, recall)),
                 F(correct.Length == 0 ? 0.0 : correct.Average(match => match.Iou)));
         }
-        csv.Write(path, overwrite);
+        csv.Write(path, options.OverwriteOutputs);
     }
 
-    private static void WriteConfusionMatrix(string path, IReadOnlyList<AnalyzedImage> images, bool overwrite)
+    private static void WriteConfusionMatrix(
+        string path,
+        IReadOnlyList<AnalyzedImage> images,
+        ResultAnalysisOptions options)
     {
+        if (!options.EvaluateByClass)
+        {
+            int matched = images.Sum(image => image.Matches.Count);
+            int missed = images.Sum(image => image.Errors.Count(error => error.Type == AnalysisErrorType.Missed));
+            int falsePositive = images.Sum(image => image.Errors.Count(error => error.Type == AnalysisErrorType.FalsePositive));
+            var combined = CsvBuilder.Create("实际\\预测", "<全部类别>", "<漏检>");
+            combined.Add("<全部类别>", matched, missed);
+            combined.Add("<背景>", falsePositive, 0);
+            combined.Write(path, options.OverwriteOutputs);
+            return;
+        }
+
         string[] classes = images
             .SelectMany(image => image.GroundTruth.Concat(image.Predictions))
             .Select(annotation => annotation.Label)
@@ -418,7 +463,7 @@ internal sealed class ResultAnalysisService
         var csv = CsvBuilder.Create(["实际\\预测", .. columns]);
         foreach (string actual in rows)
             csv.Add([actual, .. columns.Select(predicted => GetCount(counts, actual, predicted))]);
-        csv.Write(path, overwrite);
+        csv.Write(path, options.OverwriteOutputs);
     }
 
     private static void Increment(Dictionary<(string, string), int> counts, string actual, string predicted)

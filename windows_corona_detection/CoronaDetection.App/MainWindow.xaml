@@ -370,6 +370,9 @@
                             <TextBlock Grid.Row="4" Text="预测标签规则" VerticalAlignment="Center"/>
                             <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
                                         Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox x:Name="EvaluateByClassCheck"
+                                          Content="按类别统计" IsChecked="True"
+                                          VerticalAlignment="Center" Margin="0,0,28,0"/>
                                 <CheckBox x:Name="IgnorePredictionAbnormalCheck"
                                           Content="忽略预测 Abnormal" IsChecked="False"
                                           VerticalAlignment="Center" Margin="0,0,28,0"/>

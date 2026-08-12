@@ -66,7 +66,8 @@ internal sealed record ResultAnalysisOptions(
     double IouThreshold = 0.5,
     bool Recursive = true,
     bool OverwriteOutputs = false,
-    PredictionLabelRules? PredictionRules = null);
+    PredictionLabelRules? PredictionRules = null,
+    bool EvaluateByClass = true);
 
 internal sealed class PredictionLabelRules(
     IEnumerable<string>? ignoredLabels = null,
