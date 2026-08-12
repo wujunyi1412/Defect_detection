@@ -122,6 +122,11 @@ internal sealed record ResultAnalysisSummary(
     double MeanIou,
     IReadOnlyList<AnalysisImageRow> Rows);
 
+internal sealed record ConfusionMatrixData(
+    IReadOnlyList<string> ActualLabels,
+    IReadOnlyList<string> PredictedLabels,
+    int[,] Counts);
+
 internal sealed class AnalysisOutputConflictException(IReadOnlyList<string> conflictingPaths)
     : IOException("分析输出目录中存在同名结果文件。")
 {

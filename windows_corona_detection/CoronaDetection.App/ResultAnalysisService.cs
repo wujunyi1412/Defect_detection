@@ -62,7 +62,8 @@ internal sealed class ResultAnalysisService
             Path.Combine(outputDirectory, "error_details.csv"),
             Path.Combine(outputDirectory, "overall_metrics.csv"),
             Path.Combine(outputDirectory, "class_metrics.csv"),
-            Path.Combine(outputDirectory, "confusion_matrix.csv")
+            Path.Combine(outputDirectory, "confusion_matrix.csv"),
+            Path.Combine(outputDirectory, "confusion_matrix.png")
         ];
         string[] visualizationPaths = images.Keys
             .Select(prefix => Path.Combine(visualizationDirectory, prefix + ".png"))
@@ -277,7 +278,15 @@ internal sealed class ResultAnalysisService
         WriteErrorDetails(Path.Combine(outputDirectory, "error_details.csv"), images, options.OverwriteOutputs);
         WriteOverallMetrics(Path.Combine(outputDirectory, "overall_metrics.csv"), images, rows, options);
         WriteClassMetrics(Path.Combine(outputDirectory, "class_metrics.csv"), images, options);
-        WriteConfusionMatrix(Path.Combine(outputDirectory, "confusion_matrix.csv"), images, options);
+        ConfusionMatrixData confusionMatrix = BuildConfusionMatrix(images, options);
+        WriteConfusionMatrix(
+            Path.Combine(outputDirectory, "confusion_matrix.csv"),
+            confusionMatrix,
+            options.OverwriteOutputs);
+        ConfusionMatrixRenderer.Render(
+            Path.Combine(outputDirectory, "confusion_matrix.png"),
+            confusionMatrix,
+            options.OverwriteOutputs);
     }
 
     private static void WriteImageSummary(string path, IReadOnlyList<AnalysisImageRow> rows, bool overwrite)
@@ -422,8 +431,7 @@ internal sealed class ResultAnalysisService
         csv.Write(path, options.OverwriteOutputs);
     }
 
-    private static void WriteConfusionMatrix(
-        string path,
+    private static ConfusionMatrixData BuildConfusionMatrix(
         IReadOnlyList<AnalyzedImage> images,
         ResultAnalysisOptions options)
     {
@@ -432,11 +440,10 @@ internal sealed class ResultAnalysisService
             int matched = images.Sum(image => image.Matches.Count);
             int missed = images.Sum(image => image.Errors.Count(error => error.Type == AnalysisErrorType.Missed));
             int falsePositive = images.Sum(image => image.Errors.Count(error => error.Type == AnalysisErrorType.FalsePositive));
-            var combined = CsvBuilder.Create("实际\\预测", "<全部类别>", "<漏检>");
-            combined.Add("<全部类别>", matched, missed);
-            combined.Add("<背景>", falsePositive, 0);
-            combined.Write(path, options.OverwriteOutputs);
-            return;
+            return new ConfusionMatrixData(
+                ["<全部类别>", "<背景>"],
+                ["<全部类别>", "<漏检>"],
+                new[,] { { matched, missed }, { falsePositive, 0 } });
         }
 
         string[] classes = images
@@ -460,10 +467,28 @@ internal sealed class ResultAnalysisService
                     Increment(counts, "<背景>", error.PredictedClass);
             }
         }
-        var csv = CsvBuilder.Create(["实际\\预测", .. columns]);
-        foreach (string actual in rows)
-            csv.Add([actual, .. columns.Select(predicted => GetCount(counts, actual, predicted))]);
-        csv.Write(path, options.OverwriteOutputs);
+        var matrix = new int[rows.Length, columns.Length];
+        for (int row = 0; row < rows.Length; row++)
+            for (int column = 0; column < columns.Length; column++)
+                matrix[row, column] = GetCount(counts, rows[row], columns[column]);
+        return new ConfusionMatrixData(rows, columns, matrix);
+    }
+
+    private static void WriteConfusionMatrix(
+        string path,
+        ConfusionMatrixData matrix,
+        bool overwrite)
+    {
+        var csv = CsvBuilder.Create(["实际\\预测", .. matrix.PredictedLabels]);
+        for (int row = 0; row < matrix.ActualLabels.Count; row++)
+        {
+            object?[] values = new object?[matrix.PredictedLabels.Count + 1];
+            values[0] = matrix.ActualLabels[row];
+            for (int column = 0; column < matrix.PredictedLabels.Count; column++)
+                values[column + 1] = matrix.Counts[row, column];
+            csv.Add(values);
+        }
+        csv.Write(path, overwrite);
     }
 
     private static void Increment(Dictionary<(string, string), int> counts, string actual, string predicted)
