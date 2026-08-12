@@ -9,6 +9,7 @@ internal static class AnnotationMatcher
     {
         if (groundTruth.Count == 0 || predictions.Count == 0) return [];
         int size = Math.Max(groundTruth.Count, predictions.Count);
+        double cardinalityBonus = size + 1.0;
         var weights = new double[size, size];
         var ious = new double[groundTruth.Count, predictions.Count];
         for (int gt = 0; gt < groundTruth.Count; gt++)
@@ -18,11 +19,11 @@ internal static class AnnotationMatcher
                 double iou = CalculateIou(groundTruth[gt].Box, predictions[pred].Box);
                 ious[gt, pred] = iou;
                 if (iou >= iouThreshold)
-                    weights[gt, pred] = 2.0 + iou;
+                    weights[gt, pred] = cardinalityBonus + iou;
             }
         }
 
-        int[] assignment = MaximizeAssignment(weights);
+        int[] assignment = MaximizeAssignment(weights, cardinalityBonus + 1.0);
         var matches = new List<AnnotationMatch>();
         for (int gt = 0; gt < groundTruth.Count; gt++)
         {
@@ -48,18 +49,16 @@ internal static class AnnotationMatcher
         return union > 0.0 ? intersection / union : 0.0;
     }
 
-    // Hungarian assignment. Candidate weights include a cardinality bonus, so
-    // the solution first maximizes the number of IoU-qualified matches and then
-    // their total IoU.
-    private static int[] MaximizeAssignment(double[,] weights)
+    // Hungarian assignment. The cardinality bonus is greater than the maximum
+    // possible total IoU difference between two assignments. Therefore the
+    // solution strictly maximizes qualified match count first, then total IoU.
+    private static int[] MaximizeAssignment(double[,] weights, double maxWeight)
     {
         int size = weights.GetLength(0);
         var u = new double[size + 1];
         var v = new double[size + 1];
         var p = new int[size + 1];
         var way = new int[size + 1];
-        const double maxWeight = 3.0;
-
         for (int row = 1; row <= size; row++)
         {
             p[0] = row;

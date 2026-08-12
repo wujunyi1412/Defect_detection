@@ -64,3 +64,11 @@ onnx_model/
 # =========================
 git_patches
 
+
+# =========================
+# 测试用例
+# =========================
+tests/calculate.cs
+tests/readme_calculate.txt
+windows_corona_detection/Lableme_metrics.md
+
