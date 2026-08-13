@@ -26,7 +26,7 @@
 namespace InspectionOverlay {
 namespace {
 
-constexpr int kDefectBoxExpansionPixels = 3;
+constexpr int kDefectBoxExpansionPixels = 2;
 
 cv::Rect ExpandDefectRect(const cv::Rect& rect, const cv::Size& image_size) {
     if (rect.empty() || image_size.width <= 0 || image_size.height <= 0) return {};
