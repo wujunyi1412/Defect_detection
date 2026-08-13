@@ -52,6 +52,7 @@ int TestFloatOverlayFileIs8Bit() {
         input.rows,
         result,
         true,
+        false,
         true,
         mask_options,
         false,
@@ -73,6 +74,7 @@ int TestConfigDefaults() {
     if (AssertTrue(cfg.yolo_enabled, "yolo_enabled default should be true")) return 1;
     if (AssertTrue(cfg.patchcore_enabled, "patchcore_enabled default should be true")) return 1;
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
+    if (AssertTrue(!cfg.expand_defect_box, "expand_defect_box default should be false")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
     if (AssertTrue(!cfg.draw_defect_mask, "draw_defect_mask default should be false")) return 1;
     if (AssertTrue(!cfg.concat_original_image, "concat_original_image default should be false")) return 1;
@@ -82,6 +84,20 @@ int TestConfigDefaults() {
                    "defect mask default color should be red")) return 1;
     if (AssertTrue(cfg.defect_mask_alpha == 0.35f, "defect_mask_alpha default should be 0.35")) return 1;
     if (AssertTrue(cfg.log_enabled, "log_enabled default should be true")) return 1;
+    return 0;
+}
+
+int TestDefectBoxExpansionClipsToImage() {
+    const cv::Size image_size(20, 15);
+    const cv::Rect centered = InspectionOverlay::ExpandDefectRectForTest(
+        cv::Rect(5, 4, 5, 4), image_size);
+    if (AssertTrue(centered == cv::Rect(2, 1, 11, 10),
+                   "centered defect box should expand by three pixels on every side")) return 1;
+
+    const cv::Rect at_edge = InspectionOverlay::ExpandDefectRectForTest(
+        cv::Rect(0, 0, 5, 4), image_size);
+    if (AssertTrue(at_edge == cv::Rect(0, 0, 8, 7),
+                   "expanded defect box should be clipped at image boundaries")) return 1;
     return 0;
 }
 
@@ -168,6 +184,7 @@ int main() {
     if (TestOverlayTextFit()) return 1;
     if (TestFloatOverlayFileIs8Bit()) return 1;
     if (TestConfigDefaults()) return 1;
+    if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;
     if (TestYoloPostprocessReusesBinaryMask()) return 1;

@@ -41,6 +41,7 @@ public:
     float mask_area_threshold_ = 0.01f;
     float dark_clusters_threshold_ = 0.8f;
     bool draw_defect_box_ = true;
+    bool expand_defect_box_ = false;
     bool draw_box_details_ = true;
     bool concat_original_image_ = false;
     bool yolo_enabled_ = true;
@@ -114,6 +115,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->mask_area_threshold_ = config.patchcore_mask_area_threshold;
     pImpl->dark_clusters_threshold_ = config.dark_clusters_threshold;
     pImpl->draw_defect_box_ = config.draw_defect_box;
+    pImpl->expand_defect_box_ = config.expand_defect_box;
     pImpl->draw_box_details_ = config.draw_box_details;
     pImpl->concat_original_image_ = config.concat_original_image;
     pImpl->yolo_enabled_ = config.yolo_enabled;
@@ -335,6 +337,10 @@ bool InspectionEngine::ShouldDrawBoxDetails() const {
 
 bool InspectionEngine::ShouldDrawDefectBox() const {
     return pImpl->draw_defect_box_;
+}
+
+bool InspectionEngine::ShouldExpandDefectBox() const {
+    return pImpl->expand_defect_box_;
 }
 
 bool InspectionEngine::ShouldConcatOriginalImage() const {

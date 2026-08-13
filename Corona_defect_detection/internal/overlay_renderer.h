@@ -13,6 +13,7 @@ bool RenderResultOverlayToHalconHandle(
     int32_t height,
     const InspectionDLL::InferenceResult& result,
     bool draw_defect_box,
+    bool expand_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
     bool concat_original_image,
@@ -25,6 +26,7 @@ bool RenderResultOverlayToFile(
     int32_t height,
     const InspectionDLL::InferenceResult& result,
     bool draw_defect_box,
+    bool expand_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
     bool concat_original_image,
@@ -32,5 +34,7 @@ bool RenderResultOverlayToFile(
     std::string& err);
 
 std::string FitTextToWidthForTest(const std::string& text, int max_width, double font_scale, int thickness);
+
+cv::Rect ExpandDefectRectForTest(const cv::Rect& rect, const cv::Size& image_size);
 
 }  // namespace InspectionOverlay

@@ -41,6 +41,7 @@ struct InspectionConfigData {
     float patchcore_mask_area_threshold = 0.3f;
     float dark_clusters_threshold = 0.8f;
     bool draw_defect_box = true;
+    bool expand_defect_box = false;
     bool draw_box_details = true;
     bool draw_defect_mask = false;
     bool concat_original_image = false;

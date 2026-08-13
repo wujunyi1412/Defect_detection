@@ -26,6 +26,20 @@
 namespace InspectionOverlay {
 namespace {
 
+constexpr int kDefectBoxExpansionPixels = 3;
+
+cv::Rect ExpandDefectRect(const cv::Rect& rect, const cv::Size& image_size) {
+    if (rect.empty() || image_size.width <= 0 || image_size.height <= 0) return {};
+
+    const int left = std::max(0, rect.x - kDefectBoxExpansionPixels);
+    const int top = std::max(0, rect.y - kDefectBoxExpansionPixels);
+    const int right = std::min(image_size.width,
+                               rect.x + rect.width + kDefectBoxExpansionPixels);
+    const int bottom = std::min(image_size.height,
+                                rect.y + rect.height + kDefectBoxExpansionPixels);
+    return cv::Rect(left, top, right - left, bottom - top);
+}
+
 // 辅助函数：将文本适配到指定宽度
 std::string FitTextToWidth(const std::string& text, int max_width, double font_scale, int thickness) {
     if (max_width <= 0) return std::string();
@@ -163,6 +177,7 @@ bool RenderResultOverlayToHalconHandle(
     int32_t height,
     const InspectionDLL::InferenceResult& result,
     bool draw_defect_box,
+    bool expand_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
     bool concat_original_image,
@@ -263,7 +278,10 @@ bool RenderResultOverlayToHalconHandle(
             if (r.width <= 0 || r.height <= 0) continue;
 
             if (draw_defect_box) {
-                cv::rectangle(vis, r, color, 2);
+                const cv::Rect draw_r = expand_defect_box
+                    ? ExpandDefectRect(r, vis.size())
+                    : r;
+                cv::rectangle(vis, draw_r, color, 2);
             }
 
             if (draw_box_details) {
@@ -362,6 +380,7 @@ bool RenderResultOverlayToFile(
     int32_t height,
     const InspectionDLL::InferenceResult& result,
     bool draw_defect_box,
+    bool expand_defect_box,
     bool draw_box_details,
     const InspectionDLL::MaskOverlayOptions& mask_options,
     bool concat_original_image,
@@ -379,6 +398,7 @@ bool RenderResultOverlayToFile(
             height,
             result,
             draw_defect_box,
+            expand_defect_box,
             draw_box_details,
             mask_options,
             concat_original_image,
@@ -421,6 +441,10 @@ bool RenderResultOverlayToFile(
 
 std::string FitTextToWidthForTest(const std::string& text, int max_width, double font_scale, int thickness) {
     return FitTextToWidth(text, max_width, font_scale, thickness);
+}
+
+cv::Rect ExpandDefectRectForTest(const cv::Rect& rect, const cv::Size& image_size) {
+    return ExpandDefectRect(rect, image_size);
 }
 
 }  // namespace InspectionOverlay

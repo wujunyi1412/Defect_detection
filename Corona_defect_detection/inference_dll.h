@@ -59,6 +59,8 @@ public:
 
     DLL_EXPORT bool ShouldDrawDefectBox() const;
 
+    DLL_EXPORT bool ShouldExpandDefectBox() const;
+
     DLL_EXPORT bool ShouldDrawBoxDetails() const;
 
     DLL_EXPORT bool ShouldConcatOriginalImage() const;
