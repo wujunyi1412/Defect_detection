@@ -5,9 +5,10 @@
 
 ## 1. 这个项目由什么组成
 
-整个程序可以分成四层：
+整个程序有两条主要的 C#/C++ 调用链：
 
 ```text
+推理链：
 XAML 界面
   ↓ 点击事件、数据绑定
 MainWindow.xaml.cs（界面流程）
@@ -15,6 +16,13 @@ MainWindow.xaml.cs（界面流程）
 InspectionEngine.cs（C# 资源管理和结果转换）
   ↓ P/Invoke
 NativeMethods.cs → Corona_defect_detection.dll → C++ InspectionEngine
+
+评价链：
+MainWindow.ResultAnalysis.cs（分析界面）
+  ↓ 数据集读取、标签规则和报告组织
+ResultAnalysisService.cs
+  ↓ P/Invoke
+EvaluationMetricsNative.cs → evaluation_metrics.dll → C++ 评价指标核心
 ```
 
 主要文件如下：
@@ -30,15 +38,29 @@ windows_corona_detection/
 │  ├─ MainWindow.xaml.cs                  界面事件和完整检测流程
 │  ├─ NativeMethods.cs                    C DLL 函数和 C 结构体的 C# 声明
 │  ├─ InspectionEngine.cs                 DLL 句柄生命周期及结果转换
+│  ├─ ResultAnalysisService.cs             评价任务、错误详情和报告组织
+│  ├─ AnnotationMatcher.cs                 C++ 匹配结果到 C# 对象的转换
+│  ├─ EvaluationMetricsNative.cs           评价指标 DLL 的 P/Invoke 适配层
 │  ├─ IniDocument.cs                      config.ini 的读取、编辑和保存
 │  ├─ DetectionFiles.cs                   图片枚举、输出路径、CSV 保存
 │  └─ CoronaDetection.App.csproj          .NET/WPF、版本、图标和发布资源
 └─ package/                               生成的便携发布目录，不提交 Git
 ```
 
+仓库根目录的 `evaluation_metrics/` 是独立的 C++17 评价指标模块：
+
+```text
+evaluation_metrics/
+├─ include/evaluation_metrics/             C++ API 和稳定 C ABI
+├─ src/                                    IoU、Hungarian 匹配和指标实现
+├─ tests/                                  C++ API/C ABI 单元测试
+├─ CMakeLists.txt                          独立库和测试目标
+└─ README.md                               模块扩展说明
+```
+
 仓库根目录还有两个常用脚本：
 
-- `build_windows_app.bat`：编译 C++ DLL，再编译 WPF 上位机。
+- `build_windows_app.bat`：编译两个 C++ DLL、运行评价指标测试，再编译 WPF 上位机。
 - `package_windows_app.bat`：生成包含 .NET、原生 DLL 和必要模型的便携目录。
 
 ## 2. 先用 C++ 思维理解 C#
@@ -266,6 +288,46 @@ NativeMethods 只描述 DLL 原始接口
 ```
 
 这和 C++ 中给底层 C API 再包一层 RAII 类是同一个思路。
+
+### 6.4 评价指标为什么是独立的 C++ DLL
+
+`evaluation_metrics.dll` 不依赖 OpenCV、HALCON、ONNX Runtime 或 .NET，可以独立复用。
+目前 C++ 负责：
+
+- 轴对齐矩形 IoU；
+- Hungarian 一对一匹配：先最大化达标匹配数，再最大化总 IoU；
+- Precision、Recall、F1；
+- 定位召回率、匹配后分类准确率和平均匹配 IoU。
+
+调用关系如下：
+
+```text
+LabelMeAnnotationReader（C# 读取 JSON）
+  ↓ BoundingBox 数组
+AnnotationMatcher / EvaluationMetricsNative（轻量封送）
+  ↓
+evaluation_metrics_c_api.h（稳定 C ABI）
+  ↓
+evaluation_metrics.h/.cpp（可复用 C++ 核心）
+```
+
+评价支持两种模式：
+
+- 按类别统计：IoU 达标且类别正确才是 TP，类别不同计为类别错误。
+- 仅定位统计：任何 IoU 达标匹配都是 TP，不比较类别。
+
+主要公式为：
+
+```text
+Precision = TP / (TP + 误检 + 类别错误)
+Recall = TP / (TP + 漏检 + 类别错误)
+F1 = 2 × Precision × Recall / (Precision + Recall)
+平均匹配 IoU = 匹配 IoU 总和 / 匹配数量
+```
+
+JSON 读取、预测标签忽略/映射、CSV、混淆矩阵显示和错误图片渲染继续留在 C#。这些逻辑与
+文件格式和 UI 更紧密；新增 AP、mAP、specificity 或多 IoU 阈值指标时，应优先扩展
+`evaluation_metrics` 的 C++ 输入/结果结构，再同步 C ABI 和 `EvaluationMetricsNative.cs`。
 
 ## 7. DLL 句柄的完整生命周期
 
@@ -541,7 +603,7 @@ MainWindow.xaml.cs 的界面调用
 
 ### `DllNotFoundException`
 
-不一定只是缺少 `Corona_defect_detection.dll`。它依赖的
+不一定只是缺少 `Corona_defect_detection.dll` 或 `evaluation_metrics.dll`。推理 DLL 依赖的
 `onnxruntime.dll`、HALCON、Faiss、OpenBLAS 或 OpenCV 缺失时，也可能显示同样错误。
 
 ### `EntryPointNotFoundException`
@@ -576,9 +638,11 @@ build_windows_app.bat
 
 它会：
 
-1. 用根目录 `CMakeLists.txt` 编译 C++ DLL。
-2. 把原生运行 DLL 更新到 `Runtime`。
-3. 用本目录 `CMakeLists.txt` 发布 WPF。
+1. 用根目录 `CMakeLists.txt` 编译 `Corona_defect_detection.dll`。
+2. 编译 `evaluation_metrics.dll` 及其单元测试。
+3. 运行 `evaluation_metrics_tests`，失败时停止构建。
+4. 把原生运行 DLL 更新到 `Runtime`。
+5. 用本目录 `CMakeLists.txt` 发布 WPF。
 
 输出：
 
@@ -613,8 +677,11 @@ windows_corona_detection\package\CoronaDetection_版本_win-x64
 4. `NativeMethods.cs`：把每个字段与 `inference_c_api.h` 对照。
 5. `InspectionEngine.cs`：理解句柄、`IDisposable`、`lock` 和结果转换。
 6. `Start_Click`：完整追踪一张图片。
-7. `IniDocument.cs`：学习对象绑定和配置编辑。
-8. `App.xaml/App.xaml.cs`：最后看应用级生命周期和异常处理。
+7. `EvaluationMetricsNative.cs`：理解评价指标的结构体封送。
+8. `evaluation_metrics/`：对照阅读 C ABI、C++ 核心和测试。
+9. `ResultAnalysisService.cs`：追踪读取标注、匹配、统计和生成报告的流程。
+10. `IniDocument.cs`：学习对象绑定和配置编辑。
+11. `App.xaml/App.xaml.cs`：最后看应用级生命周期和异常处理。
 
 ## 18. 建议动手练习
 
