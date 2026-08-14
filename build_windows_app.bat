@@ -31,7 +31,7 @@ if not errorlevel 1 (
     goto :error
 )
 
-echo [1/5] Configuring native C++ project...
+echo [1/6] Configuring native C++ project...
 if exist "%NATIVE_BUILD%\CMakeCache.txt" (
     cmake -S "%PROJECT_ROOT%" -B "%NATIVE_BUILD%"
 ) else (
@@ -39,8 +39,8 @@ if exist "%NATIVE_BUILD%\CMakeCache.txt" (
 )
 if errorlevel 1 goto :error
 
-echo [2/5] Building Corona_defect_detection.dll...
-cmake --build "%NATIVE_BUILD%" --config "%CONFIGURATION%" --target Corona_defect_detection
+echo [2/6] Building native inference and evaluation DLLs...
+cmake --build "%NATIVE_BUILD%" --config "%CONFIGURATION%" --target Corona_defect_detection evaluation_metrics evaluation_metrics_tests
 if errorlevel 1 goto :error
 
 set "NATIVE_DLL=%NATIVE_BUILD%\bin\%CONFIGURATION%\Corona_defect_detection.dll"
@@ -50,9 +50,14 @@ if not exist "%NATIVE_DLL%" (
     goto :error
 )
 
-echo [3/5] Updating native runtime DLLs...
+echo [3/6] Running evaluation metrics tests...
+ctest --test-dir "%NATIVE_BUILD%" -C "%CONFIGURATION%" -R evaluation_metrics_tests --output-on-failure
+if errorlevel 1 goto :error
+
+echo [4/6] Updating native runtime DLLs...
 for %%F in (
     Corona_defect_detection.dll
+    evaluation_metrics.dll
     onnxruntime.dll
     halcon.dll
     halconcpp.dll
@@ -70,7 +75,7 @@ for %%F in (
     if errorlevel 1 goto :error
 )
 
-echo [4/5] Configuring the WPF CMake project...
+echo [5/6] Configuring the WPF CMake project...
 if exist "%APP_BUILD%\CMakeCache.txt" (
     cmake -S "%APP_SOURCE%" -B "%APP_BUILD%"
 ) else (
@@ -78,7 +83,7 @@ if exist "%APP_BUILD%\CMakeCache.txt" (
 )
 if errorlevel 1 goto :error
 
-echo [5/5] Publishing CoronaDetection.exe...
+echo [6/6] Publishing CoronaDetection.exe...
 cmake --build "%APP_BUILD%" --config "%CONFIGURATION%" --target CoronaDetection
 if errorlevel 1 goto :error
 

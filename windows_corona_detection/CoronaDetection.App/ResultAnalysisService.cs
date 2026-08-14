@@ -148,16 +148,17 @@ internal sealed class ResultAnalysisService
             int misclassified = image.Matches.Count - truePositive;
             int missed = image.Errors.Count(error => error.Type == AnalysisErrorType.Missed);
             int falsePositive = image.Errors.Count(error => error.Type == AnalysisErrorType.FalsePositive);
-            int metricFalseNegative = missed + misclassified;
-            int metricFalsePositive = falsePositive + misclassified;
-            double precision = Score(truePositive, truePositive + metricFalsePositive,
-                image.GroundTruth.Count == 0);
-            double recall = Score(truePositive, truePositive + metricFalseNegative,
-                image.Predictions.Count == 0);
-            double f1 = F1(precision, recall);
-            double meanIou = image.Matches.Count == 0
-                ? 0.0
-                : image.Matches.Average(match => match.Iou);
+            EvaluationMetricsNative.MetricResult metrics = EvaluationMetricsNative.Calculate(
+                image.GroundTruth.Count,
+                image.Predictions.Count,
+                truePositive,
+                missed,
+                falsePositive,
+                misclassified,
+                image.Matches.Sum(match => match.Iou),
+                image.Matches.Count,
+                image.GroundTruth.Count == 0 ? 1.0 : 0.0,
+                image.Predictions.Count == 0 ? 1.0 : 0.0);
             string visualizationPath = string.Empty;
             if (image.Errors.Count > 0)
             {
@@ -180,10 +181,10 @@ internal sealed class ResultAnalysisService
                 missed,
                 falsePositive,
                 misclassified,
-                precision,
-                recall,
-                f1,
-                meanIou,
+                metrics.Precision,
+                metrics.Recall,
+                metrics.F1,
+                metrics.MeanIou,
                 visualizationPath,
                 status);
             rows.Add(row);
@@ -195,10 +196,15 @@ internal sealed class ResultAnalysisService
         int totalMissed = rows.Sum(row => row.MissedCount);
         int totalFalsePositive = rows.Sum(row => row.FalsePositiveCount);
         int totalMisclassified = rows.Sum(row => row.MisclassifiedCount);
-        int totalMetricFp = totalFalsePositive + totalMisclassified;
-        int totalMetricFn = totalMissed + totalMisclassified;
-        double overallPrecision = Ratio(totalTp, totalTp + totalMetricFp);
-        double overallRecall = Ratio(totalTp, totalTp + totalMetricFn);
+        EvaluationMetricsNative.MetricResult overallMetrics = EvaluationMetricsNative.Calculate(
+            analyzedImages.Sum(image => image.GroundTruth.Count),
+            analyzedImages.Sum(image => image.Predictions.Count),
+            totalTp,
+            totalMissed,
+            totalFalsePositive,
+            totalMisclassified,
+            analyzedImages.SelectMany(image => image.Matches).Sum(match => match.Iou),
+            analyzedImages.Sum(image => image.Matches.Count));
         return new ResultAnalysisSummary(
             rows.Count,
             rows.Count(row => row.MissedCount + row.FalsePositiveCount + row.MisclassifiedCount > 0),
@@ -206,12 +212,10 @@ internal sealed class ResultAnalysisService
             totalMissed,
             totalFalsePositive,
             totalMisclassified,
-            overallPrecision,
-            overallRecall,
-            F1(overallPrecision, overallRecall),
-            analyzedImages.SelectMany(image => image.Matches).Any()
-                ? analyzedImages.SelectMany(image => image.Matches).Average(match => match.Iou)
-                : 0.0,
+            overallMetrics.Precision,
+            overallMetrics.Recall,
+            overallMetrics.F1,
+            overallMetrics.MeanIou,
             rows);
     }
 
@@ -340,12 +344,15 @@ internal sealed class ResultAnalysisService
         int missed = rows.Sum(row => row.MissedCount);
         int falsePositive = rows.Sum(row => row.FalsePositiveCount);
         int misclassified = rows.Sum(row => row.MisclassifiedCount);
-        double precision = Ratio(tp, tp + falsePositive + misclassified);
-        double recall = Ratio(tp, tp + missed + misclassified);
-        int localized = tp + misclassified;
-        double meanIou = images.SelectMany(image => image.Matches).Any()
-            ? images.SelectMany(image => image.Matches).Average(match => match.Iou)
-            : 0.0;
+        EvaluationMetricsNative.MetricResult metrics = EvaluationMetricsNative.Calculate(
+            gtCount,
+            predCount,
+            tp,
+            missed,
+            falsePositive,
+            misclassified,
+            images.SelectMany(image => image.Matches).Sum(match => match.Iou),
+            images.Sum(image => image.Matches.Count));
         var csv = CsvBuilder.Create("指标", "值", "说明");
         PredictionLabelRules rules = options.PredictionRules ?? new PredictionLabelRules();
         csv.Add("IoU匹配阈值", F(options.IouThreshold), "预测框与GT外接矩形的一对一匹配阈值");
@@ -373,12 +380,12 @@ internal sealed class ResultAnalysisService
         csv.Add("漏检", missed, "未匹配GT");
         csv.Add("误检", falsePositive, "未匹配预测");
         csv.Add("类别错误", misclassified, "IoU达标但类别不同");
-        csv.Add("Precision", F(precision), "TP/(TP+误检+类别错误)");
-        csv.Add("Recall", F(recall), "TP/(TP+漏检+类别错误)");
-        csv.Add("F1", F(F1(precision, recall)), "Precision与Recall调和平均");
-        csv.Add("定位召回率", F(Ratio(localized, gtCount)), "IoU达标的匹配数/GT数，不考虑类别");
-        csv.Add("匹配后分类正确率", F(Ratio(tp, localized)), "类别正确匹配数/全部定位匹配数");
-        csv.Add("平均匹配IoU", F(meanIou), "全部IoU达标匹配的平均值");
+        csv.Add("Precision", F(metrics.Precision), "TP/(TP+误检+类别错误)");
+        csv.Add("Recall", F(metrics.Recall), "TP/(TP+漏检+类别错误)");
+        csv.Add("F1", F(metrics.F1), "Precision与Recall调和平均");
+        csv.Add("定位召回率", F(metrics.LocalizationRecall), "IoU达标的匹配数/GT数，不考虑类别");
+        csv.Add("匹配后分类正确率", F(metrics.MatchedClassAccuracy), "类别正确匹配数/全部定位匹配数");
+        csv.Add("平均匹配IoU", F(metrics.MeanIou), "全部IoU达标匹配的平均值");
         csv.Write(path, options.OverwriteOutputs);
     }
 
@@ -393,14 +400,14 @@ internal sealed class ResultAnalysisService
             int pred = images.Sum(image => image.Predictions.Count);
             AnnotationMatch[] matches = images.SelectMany(image => image.Matches).ToArray();
             int tp = matches.Length;
-            double precision = Ratio(tp, pred);
-            double recall = Ratio(tp, gt);
+            EvaluationMetricsNative.MetricResult metrics = EvaluationMetricsNative.Calculate(
+                gt, pred, tp, gt - tp, pred - tp, 0,
+                matches.Sum(match => match.Iou), matches.Length);
             var combined = CsvBuilder.Create(
                 "类别", "GT数", "预测数", "TP", "FN", "FP", "Precision", "Recall", "F1", "平均正确匹配IoU");
             combined.Add(
                 "<全部类别>", gt, pred, tp, gt - tp, pred - tp,
-                F(precision), F(recall), F(F1(precision, recall)),
-                F(matches.Length == 0 ? 0.0 : matches.Average(match => match.Iou)));
+                F(metrics.Precision), F(metrics.Recall), F(metrics.F1), F(metrics.MeanIou));
             combined.Write(path, options.OverwriteOutputs);
             return;
         }
@@ -421,12 +428,12 @@ internal sealed class ResultAnalysisService
                 .Where(match => match.ClassCorrect && SameClass(match.GroundTruth.Label, className))
                 .ToArray();
             int tp = correct.Length;
-            double precision = Ratio(tp, pred);
-            double recall = Ratio(tp, gt);
+            EvaluationMetricsNative.MetricResult metrics = EvaluationMetricsNative.Calculate(
+                gt, pred, tp, gt - tp, pred - tp, 0,
+                correct.Sum(match => match.Iou), correct.Length);
             csv.Add(
                 className, gt, pred, tp, gt - tp, pred - tp,
-                F(precision), F(recall), F(F1(precision, recall)),
-                F(correct.Length == 0 ? 0.0 : correct.Average(match => match.Iou)));
+                F(metrics.Precision), F(metrics.Recall), F(metrics.F1), F(metrics.MeanIou));
         }
         csv.Write(path, options.OverwriteOutputs);
     }
@@ -502,15 +509,6 @@ internal sealed class ResultAnalysisService
 
     private static bool SameClass(string left, string right) =>
         left.Equals(right, StringComparison.OrdinalIgnoreCase);
-
-    private static double Score(int numerator, int denominator, bool oppositeSetEmpty) =>
-        denominator == 0 ? (oppositeSetEmpty ? 1.0 : 0.0) : (double)numerator / denominator;
-
-    private static double Ratio(int numerator, int denominator) =>
-        denominator == 0 ? 0.0 : (double)numerator / denominator;
-
-    private static double F1(double precision, double recall) =>
-        precision + recall == 0.0 ? 0.0 : 2.0 * precision * recall / (precision + recall);
 
     private static string F(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 

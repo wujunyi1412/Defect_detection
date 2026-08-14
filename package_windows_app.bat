@@ -67,6 +67,7 @@ for %%F in ("%PACKAGE_DIR%\mscordaccore_*.dll") do (
 )
 
 if not exist "%PACKAGE_DIR%\CoronaDetection.exe" goto :error
+if not exist "%PACKAGE_DIR%\evaluation_metrics.dll" goto :error
 if not exist "%PACKAGE_DIR%\halcon.dll" goto :error
 if not exist "%PACKAGE_DIR%\onnx_model\yolov8_seg_0720.onnx" goto :error
 if not exist "%PACKAGE_DIR%\onnx_model\patchcore_backbone.onnx" goto :error
