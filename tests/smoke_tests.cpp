@@ -323,6 +323,101 @@ int TestAaConfigParsing() {
     return 0;
 }
 
+int TestContrastThresholdUsesCategoryDirection() {
+    InspectionDLL::DetectionResult yolo_detail;
+    yolo_detail.name = "Stain";
+    yolo_detail.score = 0.9f;
+    yolo_detail.contrast = 0.7f;
+    yolo_detail.area = 25;
+    yolo_detail.w = 5.0f;
+    yolo_detail.h = 5.0f;
+
+    InspectionDLL::Internal::YoloDerived yolo;
+    yolo.has_detections = true;
+    yolo.details.push_back(yolo_detail);
+
+    InspectionDLL::Internal::PatchCoreDerived patchcore;
+    InspectionDLL::Internal::ResultComposeContext context;
+    context.stain_filter.contrast_threshold = 0.8f;
+
+    InspectionDLL::InferenceResult output;
+    const cv::Mat gray(32, 32, CV_8U, cv::Scalar(128));
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1,
+                   "Stain contrast below the threshold should be preserved")) return 1;
+
+    yolo.details[0].contrast = 0.8f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.empty(),
+                   "Stain contrast equal to the threshold should be filtered")) return 1;
+
+    yolo.details[0].contrast = 0.9f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.empty(),
+                   "Stain contrast above the threshold should be filtered")) return 1;
+
+    yolo.details[0].name = "DarkClusters";
+    yolo.details[0].contrast = 0.7f;
+    context.darkclusters_filter.contrast_threshold = 0.8f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1,
+                   "DarkClusters contrast below the threshold should be preserved")) return 1;
+
+    yolo.details[0].name = "BrightStripes";
+    yolo.details[0].contrast = 0.7f;
+    context.brightstripes_filter.contrast_threshold = 0.8f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.empty(),
+                   "BrightStripes contrast below the threshold should be filtered")) return 1;
+
+    yolo.details[0].contrast = 0.8f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1,
+                   "BrightStripes contrast equal to the threshold should be preserved")) return 1;
+
+    yolo.details[0].name = "LineArtifacts";
+    yolo.details[0].contrast = 0.9f;
+    context.lineartifacts_filter.contrast_threshold = 0.8f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1,
+                   "LineArtifacts contrast above the threshold should be preserved")) return 1;
+
+    context.lineartifacts_filter.contrast_threshold = 0.0f;
+    yolo.details[0].contrast = 0.1f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1,
+                   "zero contrast threshold should disable contrast filtering")) return 1;
+
+    yolo = {};
+    patchcore.score = 2.1f;
+    patchcore.area_ratio = 0.5f;
+    patchcore.has_defect = true;
+    patchcore.area = 100;
+    patchcore.w = 10;
+    patchcore.h = 10;
+    patchcore.contrast = 0.7f;
+    context.abnormal_filter.contrast_threshold = 0.8f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.empty(),
+                   "PatchCore contrast below the threshold should be filtered")) return 1;
+
+    patchcore.contrast = 0.8f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1 && output.details[0].name == "Abnormal",
+                   "PatchCore contrast equal to the threshold should be preserved")) return 1;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -331,6 +426,7 @@ int main() {
     if (TestConfigDefaults()) return 1;
     if (TestAaYoloFilterRules()) return 1;
     if (TestAaConfigParsing()) return 1;
+    if (TestContrastThresholdUsesCategoryDirection()) return 1;
     if (TestPatchCoreDetailSuppressionWhenYoloDetected()) return 1;
     if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;

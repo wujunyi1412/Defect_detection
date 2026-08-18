@@ -1353,7 +1353,7 @@ dark_clusters_threshold=0.8
 - `contrast=NaN`：表示失败，不参与 `Stain/DarkClusters` 重分类。
 
 当 `contrast_threshold=0` 时表示关闭对比度过滤，`NaN` 不会仅因该阈值被过滤。
-当 `contrast_threshold>0` 时，`NaN` 不能通过对比度过滤。
+当 `contrast_threshold>0` 时，Stain/DarkClusters 仅保留严格满足 `contrast < contrast_threshold` 的结果；BrightStripes/LineArtifacts/PatchCore Abnormal 保留 `contrast >= contrast_threshold` 的结果。所有类别的 `NaN` 都不能通过对比度过滤。
 
 ---
 

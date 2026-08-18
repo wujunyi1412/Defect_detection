@@ -10,9 +10,14 @@
 namespace InspectionDLL::Internal {
 namespace {
 
-bool PassContrastThreshold(float contrast, float threshold) {
+bool IsDarkDefectCategory(const std::string& name) {
+    return name == "Stain" || name == "DarkClusters";
+}
+
+bool PassContrastThreshold(float contrast, float threshold, bool keep_below_threshold) {
     if (threshold <= 0.0f) return true;
-    return IsContrastRatioValid(contrast) && contrast >= threshold;
+    if (!IsContrastRatioValid(contrast)) return false;
+    return keep_below_threshold ? contrast < threshold : contrast >= threshold;
 }
 
 }  // namespace
@@ -143,7 +148,10 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         }
         if (!cf->enable) continue;
         if (detail.score < cf->confidence_threshold) continue;
-        if (!PassContrastThreshold(detail.contrast, cf->contrast_threshold)) continue;
+        if (!PassContrastThreshold(
+                detail.contrast,
+                cf->contrast_threshold,
+                IsDarkDefectCategory(detail.name))) continue;
         if (cf->min_width > 0 && detail.w < static_cast<float>(cf->min_width)) continue;
         if (cf->min_height > 0 && detail.h < static_cast<float>(cf->min_height)) continue;
         if (cf->min_area > 0 && detail.area < cf->min_area) continue;
@@ -167,7 +175,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         (context.abnormal_filter.min_width <= 0 || pc.w >= context.abnormal_filter.min_width) &&
         (context.abnormal_filter.min_height <= 0 || pc.h >= context.abnormal_filter.min_height) &&
         (context.abnormal_filter.min_area <= 0 || pc.area >= context.abnormal_filter.min_area) &&
-        PassContrastThreshold(pc.contrast, context.abnormal_filter.contrast_threshold);
+        PassContrastThreshold(pc.contrast, context.abnormal_filter.contrast_threshold, false);
 
     if (include_patchcore_details && pc.has_crosshair_grid && abnormal_is_ng) {
         std::vector<Component> comps = pc.crosshair_components;
@@ -194,7 +202,10 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
             if (context.abnormal_filter.min_width > 0 && w1 < context.abnormal_filter.min_width) continue;
             if (context.abnormal_filter.min_height > 0 && h1 < context.abnormal_filter.min_height) continue;
             if (context.abnormal_filter.min_area > 0 && area < context.abnormal_filter.min_area) continue;
-            if (!PassContrastThreshold(contrast, context.abnormal_filter.contrast_threshold)) continue;
+            if (!PassContrastThreshold(
+                    contrast,
+                    context.abnormal_filter.contrast_threshold,
+                    false)) continue;
 
             DetectionResult detail;
             detail.name = "Abnormal";
