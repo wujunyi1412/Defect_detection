@@ -1,11 +1,13 @@
 #include <iostream>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include "config.h"
+#include "internal/aa_yolo_filter.h"
 #include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
 #include "internal/result_builder.h"
@@ -76,6 +78,12 @@ int TestConfigDefaults() {
     if (AssertTrue(cfg.patchcore_enabled, "patchcore_enabled default should be true")) return 1;
     if (AssertTrue(!cfg.suppress_patchcore_when_yolo_detected,
                    "suppress_patchcore_when_yolo_detected default should be false")) return 1;
+    if (AssertTrue(!cfg.aa_filter.enable, "AA filter default should be disabled")) return 1;
+    if (AssertTrue(cfg.aa_filter.center_y_min == 665.0f &&
+                   cfg.aa_filter.center_y_max == 715.0f,
+                   "AA filter default center Y range should be [665, 715]")) return 1;
+    if (AssertTrue(cfg.aa_filter.min_width_height_ratio == 3.0f,
+                   "AA filter default width-height ratio should be 3")) return 1;
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(!cfg.expand_defect_box, "expand_defect_box default should be false")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
@@ -227,6 +235,91 @@ int TestPatchCoreDetailSuppressionWhenYoloDetected() {
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.size() == 1 && output.details[0].name == "Abnormal",
                    "a filtered-out YOLO detection should not suppress PatchCore details")) return 1;
+
+    context.brightstripes_filter.confidence_threshold = 0.0f;
+    context.aa_filter.enable = true;
+    context.aa_filter.categories = {"BrightStripes"};
+    yolo.details[0].y = 680.0f;
+    yolo.details[0].w = 80.0f;
+    yolo.details[0].h = 20.0f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, cv::Size(128, 800), gray, gray, output, context);
+    if (AssertTrue(output.yolo_score == 0.0f &&
+                   output.details.size() == 1 && output.details[0].name == "Abnormal",
+                   "AA-filtered YOLO details should not suppress PatchCore details")) return 1;
+    return 0;
+}
+
+int TestAaYoloFilterRules() {
+    auto MakeDetail = [](const std::string& name, float y, float width, float height) {
+        InspectionDLL::DetectionResult detail;
+        detail.name = name;
+        detail.y = y;
+        detail.w = width;
+        detail.h = height;
+        return detail;
+    };
+
+    std::vector<InspectionDLL::DetectionResult> details = {
+        MakeDetail("Stain", 645.0f, 121.0f, 40.0f),
+        MakeDetail("DarkClusters", 705.0f, 80.0f, 20.0f),
+        MakeDetail("Stain", 680.0f, 60.0f, 20.0f),
+        MakeDetail("Stain", 700.0f, 121.0f, 40.0f),
+        MakeDetail("BrightStripes", 680.0f, 80.0f, 20.0f)
+    };
+
+    InspectionConfig::AaFilterConfig config;
+    InspectionDLL::Internal::ApplyAaYoloFilter(details, config);
+    if (AssertTrue(details.size() == 5, "disabled AA filter should preserve all details")) return 1;
+
+    config.enable = true;
+    config.categories = {"stain", "DARKCLUSTERS"};
+    InspectionDLL::Internal::ApplyAaYoloFilter(details, config);
+    if (AssertTrue(details.size() == 3,
+                   "AA filter should remove only matching category, Y range, and ratio details")) return 1;
+    if (AssertTrue(details[0].name == "Stain" && details[0].w == 60.0f,
+                   "ratio equal to the threshold should be preserved")) return 1;
+    if (AssertTrue(details[1].name == "Stain" && details[1].y == 700.0f,
+                   "center Y above the configured range should be preserved")) return 1;
+    if (AssertTrue(details[2].name == "BrightStripes",
+                   "categories outside the configured list should be preserved")) return 1;
+    return 0;
+}
+
+int TestAaConfigParsing() {
+    const std::filesystem::path config_path =
+        std::filesystem::temp_directory_path() / "corona_aa_filter_smoke.ini";
+    {
+        std::ofstream stream(config_path);
+        stream << "[yolo]\n"
+               << "enabled=0\n"
+               << "[patchcore]\n"
+               << "enabled=0\n"
+               << "[AA]\n"
+               << "enabled=1\n"
+               << "center_y_min=100.5\n"
+               << "center_y_max=200.5\n"
+               << "min_width_height_ratio=4.5\n"
+               << "categories= stain, LineArtifacts\n";
+    }
+
+    InspectionConfig::InspectionConfigData config;
+    std::string error;
+    const bool loaded = InspectionConfig::LoadInspectionConfig(config_path.string(), config, error);
+    std::error_code remove_error;
+    std::filesystem::remove(config_path, remove_error);
+
+    if (AssertTrue(loaded, "AA config should load: " + error)) return 1;
+    if (AssertTrue(config.aa_filter.enable, "AA config enabled flag should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.center_y_min == 100.5f &&
+                   config.aa_filter.center_y_max == 200.5f,
+                   "AA center Y range should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.min_width_height_ratio == 4.5f,
+                   "AA ratio should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.categories.size() == 2 &&
+                   config.aa_filter.categories[0] == "stain" &&
+                   config.aa_filter.categories[1] == "LineArtifacts",
+                   "AA category list should be trimmed and parsed")) return 1;
     return 0;
 }
 
@@ -236,6 +329,8 @@ int main() {
     if (TestOverlayTextFit()) return 1;
     if (TestFloatOverlayFileIs8Bit()) return 1;
     if (TestConfigDefaults()) return 1;
+    if (TestAaYoloFilterRules()) return 1;
+    if (TestAaConfigParsing()) return 1;
     if (TestPatchCoreDetailSuppressionWhenYoloDetected()) return 1;
     if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;

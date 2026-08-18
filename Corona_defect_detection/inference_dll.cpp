@@ -55,6 +55,7 @@ public:
     CategoryFilter darkclusters_filter_;
     CategoryFilter brightstripes_filter_;
     CategoryFilter lineartifacts_filter_;
+    InspectionConfig::AaFilterConfig aa_filter_;
 
     bool initialized_ = false;
 
@@ -77,6 +78,7 @@ public:
         context.darkclusters_filter = darkclusters_filter_;
         context.brightstripes_filter = brightstripes_filter_;
         context.lineartifacts_filter = lineartifacts_filter_;
+        context.aa_filter = aa_filter_;
         return context;
     }
 };
@@ -134,6 +136,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->darkclusters_filter_ = config.darkclusters_filter;
     pImpl->brightstripes_filter_ = config.brightstripes_filter;
     pImpl->lineartifacts_filter_ = config.lineartifacts_filter;
+    pImpl->aa_filter_ = config.aa_filter;
 
     if (pImpl->yolo_enabled_) {
         pImpl->yolo_detector.SetNmsMode(

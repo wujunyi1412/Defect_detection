@@ -119,6 +119,7 @@ Corona_defect_detection/
 [yolo]            # YOLO 阈值 & NMS 模式
 [patchcore]       # PatchCore 阈值
 [post]            # 后处理与输出图配置（concat_original_image=1 时左原图、右标注图）
+[AA]              # YOLO 最终结果的可配置区域/形状过滤
 [Abormal_config]  # Abnormal 类别过滤器（双阈值：score + area）
 [Stain_config]    # Stain 类别过滤器（含传统精修开关）
 [Darkclusters_config]

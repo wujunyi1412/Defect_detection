@@ -2,6 +2,8 @@
 
 #include "ini_parser.h"
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <sstream>
 #include <vector>
@@ -10,6 +12,56 @@ namespace InspectionConfig {
 namespace {
 
 namespace fs = std::filesystem;
+
+std::string TrimCopy(const std::string& value) {
+    const auto begin = std::find_if_not(value.begin(), value.end(),
+                                        [](unsigned char ch) { return std::isspace(ch); });
+    if (begin == value.end()) return {};
+    const auto end = std::find_if_not(value.rbegin(), value.rend(),
+                                      [](unsigned char ch) { return std::isspace(ch); }).base();
+    return std::string(begin, end);
+}
+
+std::string ToLowerCopy(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return value;
+}
+
+std::string CanonicalAaCategory(const std::string& category) {
+    const std::string lowered = ToLowerCopy(TrimCopy(category));
+    if (lowered == "stain") return "Stain";
+    if (lowered == "darkclusters") return "DarkClusters";
+    if (lowered == "brightstripes") return "BrightStripes";
+    if (lowered == "lineartifacts") return "LineArtifacts";
+    return {};
+}
+
+std::vector<std::string> ParseAaCategories(const std::string& value) {
+    std::vector<std::string> categories;
+    std::stringstream stream(value);
+    std::string item;
+    while (std::getline(stream, item, ',')) {
+        const std::string trimmed = TrimCopy(item);
+        if (!trimmed.empty()) categories.push_back(trimmed);
+    }
+    return categories;
+}
+
+AaFilterConfig LoadAaFilter(const IniData& ini) {
+    AaFilterConfig filter;
+    filter.enable = GetBoolOr(ini, "AA", "enabled", filter.enable);
+    filter.center_y_min = GetFloatOr(ini, "AA", "center_y_min", filter.center_y_min);
+    filter.center_y_max = GetFloatOr(ini, "AA", "center_y_max", filter.center_y_max);
+    filter.min_width_height_ratio = GetFloatOr(
+        ini, "AA", "min_width_height_ratio", filter.min_width_height_ratio);
+
+    std::string categories;
+    if (TryGetString(ini, "AA", "categories", categories)) {
+        filter.categories = ParseAaCategories(categories);
+    }
+    return filter;
+}
 
 CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& section) {
     CategoryFilterConfig filter;
@@ -95,6 +147,27 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
     if (out.defect_mask_alpha < 0.0f || out.defect_mask_alpha > 1.0f) {
         err = "post.defect_mask_alpha must be in [0, 1]";
         return false;
+    }
+
+    if (out.aa_filter.enable) {
+        if (out.aa_filter.center_y_max < out.aa_filter.center_y_min) {
+            err = "AA.center_y_max must be >= AA.center_y_min";
+            return false;
+        }
+        if (out.aa_filter.min_width_height_ratio < 0.0f) {
+            err = "AA.min_width_height_ratio must be >= 0";
+            return false;
+        }
+        if (out.aa_filter.categories.empty()) {
+            err = "AA.categories must contain at least one category when AA is enabled";
+            return false;
+        }
+        for (const auto& category : out.aa_filter.categories) {
+            if (CanonicalAaCategory(category).empty()) {
+                err = "AA.categories contains unsupported category: " + category;
+                return false;
+            }
+        }
     }
 
     if (!IsSupportedLogLevel(out.log_level)) {
@@ -187,6 +260,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.darkclusters_filter = LoadCategoryFilter(ini, "darkclusters_config");
     out.brightstripes_filter = LoadCategoryFilter(ini, "brightstripes_config");
     out.lineartifacts_filter = LoadCategoryFilter(ini, "lineartifacts_config");
+    out.aa_filter = LoadAaFilter(ini);
 
     if (!ValidateConfig(out, err)) {
         return false;

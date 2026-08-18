@@ -109,6 +109,13 @@ dark_clusters_threshold = 0.8
 suppress_patchcore_when_yolo_detected = 0  # 1：YOLO 过滤后有输出时，最终明细不包含 PatchCore Abnormal
 concat_original_image = 0  # 1：输出“左原图、右标注图”；0：仅输出标注图
 
+[AA]             # YOLO 最终结果的可配置区域/形状过滤
+enabled = 1
+center_y_min = 665
+center_y_max = 715
+min_width_height_ratio = 3.0
+categories = Stain,DarkClusters
+
 [Abnormal_config]     # Abnormal 缺陷过滤器
 [Stain_config]        # Stain 缺陷过滤器
 [Darkclusters_config] # DarkClusters 缺陷过滤器

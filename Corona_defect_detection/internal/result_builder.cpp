@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "aa_yolo_filter.h"
 #include "dark_defect_refiner.h"
 #include "image_utils.h"
 
@@ -22,11 +23,17 @@ void ComposeOutput(const PatchCoreDerived& pc,
                    const cv::Mat& gray_patchcore,
                    InferenceResult& output,
                    const ResultComposeContext& context) {
-    output.yolo_score = yolo.score;
+    std::vector<DetectionResult> yolo_details_filtered = yolo.details;
+    ApplyAaYoloFilter(yolo_details_filtered, context.aa_filter);
+
+    output.yolo_score = 0.0f;
+    for (const auto& detail : yolo_details_filtered) {
+        output.yolo_score = std::max(output.yolo_score, detail.score);
+    }
     output.patchcore_score = pc.score;
     output.patchcore_area_ratio = pc.area_ratio;
 
-    const bool has_yolo_detections = yolo.has_detections;
+    const bool has_yolo_detections = !yolo_details_filtered.empty();
     if (pc.score >= context.score_threshold || has_yolo_detections) {
         output.result = "NG";
     } else {
@@ -74,7 +81,7 @@ void ComposeOutput(const PatchCoreDerived& pc,
     }
 
     if (has_yolo_detections && !pc.has_defect) {
-        output.details.insert(output.details.end(), yolo.details.begin(), yolo.details.end());
+        output.details.insert(output.details.end(), yolo_details_filtered.begin(), yolo_details_filtered.end());
     } else if (!has_yolo_detections && pc.has_defect && !pc.has_crosshair_grid) {
         DetectionResult detail;
         detail.name = "Abnormal";
@@ -101,7 +108,7 @@ void ComposeOutput(const PatchCoreDerived& pc,
             detail.mask = pc.area_orig;
             output.details.push_back(detail);
         }
-        output.details.insert(output.details.end(), yolo.details.begin(), yolo.details.end());
+        output.details.insert(output.details.end(), yolo_details_filtered.begin(), yolo_details_filtered.end());
     }
 }
 
@@ -142,6 +149,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         if (cf->min_area > 0 && detail.area < cf->min_area) continue;
         yolo_details_filtered.push_back(detail);
     }
+    ApplyAaYoloFilter(yolo_details_filtered, context.aa_filter);
     const bool has_yolo_detections = !yolo_details_filtered.empty();
     const bool include_patchcore_details =
         !(context.suppress_patchcore_when_yolo_detected && has_yolo_detections);

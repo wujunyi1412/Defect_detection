@@ -11,6 +11,7 @@ inference_dll.cpp (主控)
     │
     ├── image_utils        ← 图像预处理 & 统计工具函数
     ├── yolo_postprocess   ← YOLO 检测结果 → YoloDerived
+    ├── aa_yolo_filter    ← YOLO 最终结果的 AA 区域/形状过滤
     ├── patchcore_postprocess ← PatchCore 异常图 → PatchCoreDerived
     │
     ├── dark_defect_refiner ← 暗缺陷几何精修 (传统CV)
@@ -90,8 +91,9 @@ inference_dll.cpp (主控)
 #### `ComposeOutputWithDefectFilter`（完整模式，带类别过滤）
 1. **YOLO 过滤**：按 `CategoryFilterConfig`（enable / confidence / contrast / min_size）逐类别过滤，Stain/DarkClusters 额外调用 `RefineDarkDefectGeometryOnly` 精修
 2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤
-3. **可选抑制**：`post.suppress_patchcore_when_yolo_detected=1` 且 YOLO 过滤后有输出时，不将 PatchCore `Abnormal` 明细写入最终结果
-4. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
+3. **AA 后过滤**：标准 YOLO 过滤后，`aa_yolo_filter` 按可配置类别、中心 Y 区间和最小宽高比移除命中的结果
+4. **可选抑制**：`post.suppress_patchcore_when_yolo_detected=1` 且 AA 过滤后仍有 YOLO 输出时，不将 PatchCore `Abnormal` 明细写入最终结果
+5. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
 
 ---
 

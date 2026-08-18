@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace InspectionConfig {
 
@@ -23,6 +24,14 @@ struct AbnormalFilterConfig {
     int min_width = 0;
     int min_height = 0;
     int min_area = 0;
+};
+
+struct AaFilterConfig {
+    bool enable = false;
+    float center_y_min = 665.0f;
+    float center_y_max = 715.0f;
+    float min_width_height_ratio = 3.0f;
+    std::vector<std::string> categories = {"Stain", "DarkClusters"};
 };
 
 struct InspectionConfigData {
@@ -55,6 +64,7 @@ struct InspectionConfigData {
     bool log_to_stderr = true;
     bool log_to_file = false;
     std::string log_file_path;
+    AaFilterConfig aa_filter;
     AbnormalFilterConfig abnormal_filter;
     CategoryFilterConfig stain_filter;
     CategoryFilterConfig darkclusters_filter;
