@@ -251,9 +251,10 @@ int TestPatchCoreDetailSuppressionWhenYoloDetected() {
 }
 
 int TestAaYoloFilterRules() {
-    auto MakeDetail = [](const std::string& name, float y, float width, float height) {
+    auto MakeDetail = [](const std::string& name, float x, float y, float width, float height) {
         InspectionDLL::DetectionResult detail;
         detail.name = name;
+        detail.x = x;
         detail.y = y;
         detail.w = width;
         detail.h = height;
@@ -261,11 +262,11 @@ int TestAaYoloFilterRules() {
     };
 
     std::vector<InspectionDLL::DetectionResult> details = {
-        MakeDetail("Stain", 645.0f, 121.0f, 40.0f),
-        MakeDetail("DarkClusters", 705.0f, 80.0f, 20.0f),
-        MakeDetail("Stain", 680.0f, 60.0f, 20.0f),
-        MakeDetail("Stain", 700.0f, 121.0f, 40.0f),
-        MakeDetail("BrightStripes", 680.0f, 80.0f, 20.0f)
+        MakeDetail("Stain", 0.0f, 645.0f, 121.0f, 40.0f),
+        MakeDetail("DarkClusters", 0.0f, 705.0f, 80.0f, 20.0f),
+        MakeDetail("Stain", 0.0f, 680.0f, 60.0f, 20.0f),
+        MakeDetail("Stain", 0.0f, 700.0f, 121.0f, 40.0f),
+        MakeDetail("BrightStripes", 0.0f, 680.0f, 80.0f, 20.0f)
     };
 
     InspectionConfig::AaFilterConfig config;
@@ -283,6 +284,23 @@ int TestAaYoloFilterRules() {
                    "center Y above the configured range should be preserved")) return 1;
     if (AssertTrue(details[2].name == "BrightStripes",
                    "categories outside the configured list should be preserved")) return 1;
+
+    std::vector<InspectionDLL::DetectionResult> position_details = {
+        MakeDetail("Stain", 454.22f, 304.30f, 170.52f, 211.39f),
+        MakeDetail("DarkClusters", 430.0f, 280.0f, 145.0f, 175.0f),
+        MakeDetail("Stain", 429.0f, 304.30f, 170.52f, 211.39f),
+        MakeDetail("BrightStripes", 454.22f, 304.30f, 170.52f, 211.39f)
+    };
+    config = {};
+    config.position_filter_enable = true;
+    config.position_categories = {"stain", "DARKCLUSTERS"};
+    InspectionDLL::Internal::ApplyAaYoloFilter(position_details, config);
+    if (AssertTrue(position_details.size() == 2,
+                   "AA position filter should remove only details matching every configured range")) return 1;
+    if (AssertTrue(position_details[0].name == "Stain" && position_details[0].x == 429.0f,
+                   "a detail outside the left-coordinate range should be preserved")) return 1;
+    if (AssertTrue(position_details[1].name == "BrightStripes",
+                   "AA position filter should preserve categories outside its list")) return 1;
     return 0;
 }
 
@@ -300,7 +318,17 @@ int TestAaConfigParsing() {
                << "center_y_min=100.5\n"
                << "center_y_max=200.5\n"
                << "min_width_height_ratio=4.5\n"
-               << "categories= stain, LineArtifacts\n";
+               << "categories= stain, LineArtifacts\n"
+               << "position_filter_enabled=1\n"
+               << "position_x_min=10.5\n"
+               << "position_x_max=20.5\n"
+               << "position_y_min=30.5\n"
+               << "position_y_max=40.5\n"
+               << "position_width_min=50.5\n"
+               << "position_width_max=60.5\n"
+               << "position_height_min=70.5\n"
+               << "position_height_max=80.5\n"
+               << "position_categories= darkclusters, BrightStripes\n";
     }
 
     InspectionConfig::InspectionConfigData config;
@@ -320,6 +348,22 @@ int TestAaConfigParsing() {
                    config.aa_filter.categories[0] == "stain" &&
                    config.aa_filter.categories[1] == "LineArtifacts",
                    "AA category list should be trimmed and parsed")) return 1;
+    if (AssertTrue(config.aa_filter.position_filter_enable,
+                   "AA position filter enabled flag should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.position_x_min == 10.5f &&
+                   config.aa_filter.position_x_max == 20.5f &&
+                   config.aa_filter.position_y_min == 30.5f &&
+                   config.aa_filter.position_y_max == 40.5f,
+                   "AA position coordinate ranges should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.position_width_min == 50.5f &&
+                   config.aa_filter.position_width_max == 60.5f &&
+                   config.aa_filter.position_height_min == 70.5f &&
+                   config.aa_filter.position_height_max == 80.5f,
+                   "AA position size ranges should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.position_categories.size() == 2 &&
+                   config.aa_filter.position_categories[0] == "darkclusters" &&
+                   config.aa_filter.position_categories[1] == "BrightStripes",
+                   "AA position category list should be trimmed and parsed")) return 1;
     return 0;
 }
 

@@ -60,6 +60,26 @@ AaFilterConfig LoadAaFilter(const IniData& ini) {
     if (TryGetString(ini, "AA", "categories", categories)) {
         filter.categories = ParseAaCategories(categories);
     }
+
+    filter.position_filter_enable = GetBoolOr(
+        ini, "AA", "position_filter_enabled", filter.position_filter_enable);
+    filter.position_x_min = GetFloatOr(ini, "AA", "position_x_min", filter.position_x_min);
+    filter.position_x_max = GetFloatOr(ini, "AA", "position_x_max", filter.position_x_max);
+    filter.position_y_min = GetFloatOr(ini, "AA", "position_y_min", filter.position_y_min);
+    filter.position_y_max = GetFloatOr(ini, "AA", "position_y_max", filter.position_y_max);
+    filter.position_width_min = GetFloatOr(
+        ini, "AA", "position_width_min", filter.position_width_min);
+    filter.position_width_max = GetFloatOr(
+        ini, "AA", "position_width_max", filter.position_width_max);
+    filter.position_height_min = GetFloatOr(
+        ini, "AA", "position_height_min", filter.position_height_min);
+    filter.position_height_max = GetFloatOr(
+        ini, "AA", "position_height_max", filter.position_height_max);
+
+    std::string position_categories;
+    if (TryGetString(ini, "AA", "position_categories", position_categories)) {
+        filter.position_categories = ParseAaCategories(position_categories);
+    }
     return filter;
 }
 
@@ -165,6 +185,34 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         for (const auto& category : out.aa_filter.categories) {
             if (CanonicalAaCategory(category).empty()) {
                 err = "AA.categories contains unsupported category: " + category;
+                return false;
+            }
+        }
+    }
+    if (out.aa_filter.position_filter_enable) {
+        if (out.aa_filter.position_x_max < out.aa_filter.position_x_min) {
+            err = "AA.position_x_max must be >= AA.position_x_min";
+            return false;
+        }
+        if (out.aa_filter.position_y_max < out.aa_filter.position_y_min) {
+            err = "AA.position_y_max must be >= AA.position_y_min";
+            return false;
+        }
+        if (out.aa_filter.position_width_max < out.aa_filter.position_width_min) {
+            err = "AA.position_width_max must be >= AA.position_width_min";
+            return false;
+        }
+        if (out.aa_filter.position_height_max < out.aa_filter.position_height_min) {
+            err = "AA.position_height_max must be >= AA.position_height_min";
+            return false;
+        }
+        if (out.aa_filter.position_categories.empty()) {
+            err = "AA.position_categories must contain at least one category when the position filter is enabled";
+            return false;
+        }
+        for (const auto& category : out.aa_filter.position_categories) {
+            if (CanonicalAaCategory(category).empty()) {
+                err = "AA.position_categories contains unsupported category: " + category;
                 return false;
             }
         }

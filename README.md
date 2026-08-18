@@ -115,6 +115,16 @@ center_y_min = 665
 center_y_max = 715
 min_width_height_ratio = 3.0
 categories = Stain,DarkClusters
+position_filter_enabled = 1
+position_categories = Stain,DarkClusters
+position_x_min = 430
+position_x_max = 480
+position_y_min = 280
+position_y_max = 340
+position_width_min = 145
+position_width_max = 200
+position_height_min = 175
+position_height_max = 245
 
 [Abnormal_config]     # Abnormal 缺陷过滤器
 [Stain_config]        # Stain 缺陷过滤器

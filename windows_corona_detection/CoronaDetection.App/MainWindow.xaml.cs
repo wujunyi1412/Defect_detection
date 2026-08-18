@@ -232,6 +232,17 @@ public partial class MainWindow : Window
             if (!ready) return;
         }
 
+        try
+        {
+            DetectionFiles.CopyConfigSnapshot(_configPath, outputRoot);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "复制配置文件失败",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
         Results.Clear();
         _details.Clear();
         TaskProgress.Minimum = 0;

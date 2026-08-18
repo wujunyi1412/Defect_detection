@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <string>
 
 namespace InspectionDLL::Internal {
@@ -22,8 +23,8 @@ bool ContainsCategory(const std::vector<std::string>& categories,
                        });
 }
 
-bool ShouldFilter(const DetectionResult& detail,
-                  const InspectionConfig::AaFilterConfig& config) {
+bool ShouldFilterByBandRule(const DetectionResult& detail,
+                            const InspectionConfig::AaFilterConfig& config) {
     if (!ContainsCategory(config.categories, detail.name)) return false;
     if (detail.h <= 0.0f) return false;
 
@@ -33,15 +34,29 @@ bool ShouldFilter(const DetectionResult& detail,
     return detail.w / detail.h > config.min_width_height_ratio;
 }
 
+bool ShouldFilterByPositionRule(const DetectionResult& detail,
+                                const InspectionConfig::AaFilterConfig& config) {
+    if (!ContainsCategory(config.position_categories, detail.name)) return false;
+    if (!std::isfinite(detail.x) || !std::isfinite(detail.y) ||
+        !std::isfinite(detail.w) || !std::isfinite(detail.h)) return false;
+
+    return detail.x >= config.position_x_min && detail.x <= config.position_x_max &&
+           detail.y >= config.position_y_min && detail.y <= config.position_y_max &&
+           detail.w >= config.position_width_min && detail.w <= config.position_width_max &&
+           detail.h >= config.position_height_min && detail.h <= config.position_height_max;
+}
+
 }  // namespace
 
 void ApplyAaYoloFilter(std::vector<DetectionResult>& details,
                        const InspectionConfig::AaFilterConfig& config) {
-    if (!config.enable) return;
+    if (!config.enable && !config.position_filter_enable) return;
     details.erase(
         std::remove_if(details.begin(), details.end(),
                        [&](const DetectionResult& detail) {
-                           return ShouldFilter(detail, config);
+                           return (config.enable && ShouldFilterByBandRule(detail, config)) ||
+                                  (config.position_filter_enable &&
+                                   ShouldFilterByPositionRule(detail, config));
                        }),
         details.end());
 }

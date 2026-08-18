@@ -60,6 +60,22 @@ internal static class DetectionFiles
         return candidate;
     }
 
+    public static string CopyConfigSnapshot(string configPath, string outputRoot)
+    {
+        string sourcePath = Path.GetFullPath(configPath);
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("当前使用的配置文件不存在。", sourcePath);
+
+        string outputDirectory = Path.GetFullPath(outputRoot);
+        Directory.CreateDirectory(outputDirectory);
+        string destinationPath = Path.Combine(outputDirectory, Path.GetFileName(sourcePath));
+        if (string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+            return destinationPath;
+
+        File.Copy(sourcePath, destinationPath, true);
+        return destinationPath;
+    }
+
     public static void SaveCsv(
         string outputRoot, IEnumerable<ResultRow> rows, IEnumerable<DetailRow> details)
     {

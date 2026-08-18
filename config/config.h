@@ -32,6 +32,17 @@ struct AaFilterConfig {
     float center_y_max = 715.0f;
     float min_width_height_ratio = 3.0f;
     std::vector<std::string> categories = {"Stain", "DarkClusters"};
+
+    bool position_filter_enable = false;
+    float position_x_min = 430.0f;
+    float position_x_max = 480.0f;
+    float position_y_min = 280.0f;
+    float position_y_max = 340.0f;
+    float position_width_min = 145.0f;
+    float position_width_max = 200.0f;
+    float position_height_min = 175.0f;
+    float position_height_max = 245.0f;
+    std::vector<std::string> position_categories = {"Stain", "DarkClusters"};
 };
 
 struct InspectionConfigData {
