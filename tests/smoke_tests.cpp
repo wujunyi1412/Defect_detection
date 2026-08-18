@@ -8,6 +8,7 @@
 #include "config.h"
 #include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
+#include "internal/result_builder.h"
 #include "internal/yolo_postprocess.h"
 #include "logger.h"
 
@@ -73,6 +74,8 @@ int TestConfigDefaults() {
     InspectionConfig::InspectionConfigData cfg;
     if (AssertTrue(cfg.yolo_enabled, "yolo_enabled default should be true")) return 1;
     if (AssertTrue(cfg.patchcore_enabled, "patchcore_enabled default should be true")) return 1;
+    if (AssertTrue(!cfg.suppress_patchcore_when_yolo_detected,
+                   "suppress_patchcore_when_yolo_detected default should be false")) return 1;
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(!cfg.expand_defect_box, "expand_defect_box default should be false")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
@@ -178,12 +181,62 @@ int TestYoloPostprocessReusesBinaryMask() {
     return 0;
 }
 
+int TestPatchCoreDetailSuppressionWhenYoloDetected() {
+    InspectionDLL::Internal::PatchCoreDerived patchcore;
+    patchcore.score = 2.1f;
+    patchcore.area_ratio = 0.5f;
+    patchcore.has_defect = true;
+    patchcore.area = 100;
+    patchcore.x = 5;
+    patchcore.y = 6;
+    patchcore.w = 10;
+    patchcore.h = 10;
+
+    InspectionDLL::DetectionResult yolo_detail;
+    yolo_detail.name = "BrightStripes";
+    yolo_detail.score = 0.9f;
+    yolo_detail.area = 25;
+    yolo_detail.w = 5.0f;
+    yolo_detail.h = 5.0f;
+
+    InspectionDLL::Internal::YoloDerived yolo;
+    yolo.has_detections = true;
+    yolo.details.push_back(yolo_detail);
+
+    InspectionDLL::Internal::ResultComposeContext context;
+    InspectionDLL::InferenceResult output;
+    const cv::Mat gray(32, 32, CV_8U, cv::Scalar(128));
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+
+    if (AssertTrue(output.details.size() == 2,
+                   "default composition should preserve PatchCore and YOLO details")) return 1;
+
+    context.suppress_patchcore_when_yolo_detected = true;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+
+    if (AssertTrue(output.result == "NG", "suppression should not change the NG decision")) return 1;
+    if (AssertTrue(output.patchcore_score == patchcore.score,
+                   "suppression should preserve the PatchCore score")) return 1;
+    if (AssertTrue(output.details.size() == 1 && output.details[0].name == "BrightStripes",
+                   "suppression should keep only the filtered YOLO detail")) return 1;
+
+    context.brightstripes_filter.confidence_threshold = 0.95f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1 && output.details[0].name == "Abnormal",
+                   "a filtered-out YOLO detection should not suppress PatchCore details")) return 1;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (TestOverlayTextFit()) return 1;
     if (TestFloatOverlayFileIs8Bit()) return 1;
     if (TestConfigDefaults()) return 1;
+    if (TestPatchCoreDetailSuppressionWhenYoloDetected()) return 1;
     if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;

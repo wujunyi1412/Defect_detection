@@ -106,6 +106,7 @@ mask_area_threshold = 0.3
 
 [post]           # 后处理
 dark_clusters_threshold = 0.8
+suppress_patchcore_when_yolo_detected = 0  # 1：YOLO 过滤后有输出时，最终明细不包含 PatchCore Abnormal
 concat_original_image = 0  # 1：输出“左原图、右标注图”；0：仅输出标注图
 
 [Abnormal_config]     # Abnormal 缺陷过滤器

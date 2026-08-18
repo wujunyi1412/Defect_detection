@@ -90,7 +90,8 @@ inference_dll.cpp (主控)
 #### `ComposeOutputWithDefectFilter`（完整模式，带类别过滤）
 1. **YOLO 过滤**：按 `CategoryFilterConfig`（enable / confidence / contrast / min_size）逐类别过滤，Stain/DarkClusters 额外调用 `RefineDarkDefectGeometryOnly` 精修
 2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤
-3. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
+3. **可选抑制**：`post.suppress_patchcore_when_yolo_detected=1` 且 YOLO 过滤后有输出时，不将 PatchCore `Abnormal` 明细写入最终结果
+4. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
 
 ---
 
