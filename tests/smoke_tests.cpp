@@ -76,8 +76,8 @@ int TestConfigDefaults() {
     InspectionConfig::InspectionConfigData cfg;
     if (AssertTrue(cfg.yolo_enabled, "yolo_enabled default should be true")) return 1;
     if (AssertTrue(cfg.patchcore_enabled, "patchcore_enabled default should be true")) return 1;
-    if (AssertTrue(!cfg.suppress_patchcore_when_yolo_detected,
-                   "suppress_patchcore_when_yolo_detected default should be false")) return 1;
+    if (AssertTrue(cfg.patchcore_yolo_min_iou_threshold == 0.0f,
+                   "PatchCore/YOLO minimum IoU threshold default should be zero")) return 1;
     if (AssertTrue(!cfg.aa_filter.enable, "AA filter default should be disabled")) return 1;
     if (AssertTrue(cfg.aa_filter.center_y_min == 665.0f &&
                    cfg.aa_filter.center_y_max == 715.0f,
@@ -189,64 +189,75 @@ int TestYoloPostprocessReusesBinaryMask() {
     return 0;
 }
 
-int TestPatchCoreDetailSuppressionWhenYoloDetected() {
+int TestPatchCoreMinimumYoloIouFiltering() {
     InspectionDLL::Internal::PatchCoreDerived patchcore;
     patchcore.score = 2.1f;
     patchcore.area_ratio = 0.5f;
     patchcore.has_defect = true;
-    patchcore.area = 100;
-    patchcore.x = 5;
-    patchcore.y = 6;
-    patchcore.w = 10;
-    patchcore.h = 10;
+    patchcore.area = 400;
+    patchcore.x = 10;
+    patchcore.y = 10;
+    patchcore.w = 20;
+    patchcore.h = 20;
 
-    InspectionDLL::DetectionResult yolo_detail;
-    yolo_detail.name = "BrightStripes";
-    yolo_detail.score = 0.9f;
-    yolo_detail.area = 25;
-    yolo_detail.w = 5.0f;
-    yolo_detail.h = 5.0f;
+    InspectionDLL::DetectionResult yolo_detail_1;
+    yolo_detail_1.name = "BrightStripes";
+    yolo_detail_1.score = 0.9f;
+    yolo_detail_1.area = 400;
+    yolo_detail_1.x = 10.0f;
+    yolo_detail_1.y = 10.0f;
+    yolo_detail_1.w = 20.0f;
+    yolo_detail_1.h = 20.0f;
+
+    InspectionDLL::DetectionResult yolo_detail_2 = yolo_detail_1;
+    yolo_detail_2.x = 20.0f;
 
     InspectionDLL::Internal::YoloDerived yolo;
     yolo.has_detections = true;
-    yolo.details.push_back(yolo_detail);
+    yolo.details = {yolo_detail_1, yolo_detail_2};
 
     InspectionDLL::Internal::ResultComposeContext context;
+    context.patchcore_yolo_min_iou_threshold = 0.3f;
     InspectionDLL::InferenceResult output;
-    const cv::Mat gray(32, 32, CV_8U, cv::Scalar(128));
+    const cv::Mat gray(128, 128, CV_8U, cv::Scalar(128));
     InspectionDLL::Internal::ComposeOutputWithDefectFilter(
         patchcore, yolo, gray.size(), gray, gray, output, context);
 
-    if (AssertTrue(output.details.size() == 2,
-                   "default composition should preserve PatchCore and YOLO details")) return 1;
-
-    context.suppress_patchcore_when_yolo_detected = true;
-    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
-        patchcore, yolo, gray.size(), gray, gray, output, context);
-
-    if (AssertTrue(output.result == "NG", "suppression should not change the NG decision")) return 1;
+    if (AssertTrue(output.result == "NG", "IoU filtering should not change the NG decision")) return 1;
     if (AssertTrue(output.patchcore_score == patchcore.score,
-                   "suppression should preserve the PatchCore score")) return 1;
-    if (AssertTrue(output.details.size() == 1 && output.details[0].name == "BrightStripes",
-                   "suppression should keep only the filtered YOLO detail")) return 1;
+                    "IoU filtering should preserve the PatchCore score")) return 1;
+    if (AssertTrue(output.details.size() == 2 &&
+                   output.details[0].name == "BrightStripes" &&
+                   output.details[1].name == "BrightStripes",
+                   "minimum IoU above the threshold should remove PatchCore details")) return 1;
 
-    context.brightstripes_filter.confidence_threshold = 0.95f;
+    context.patchcore_yolo_min_iou_threshold = 0.34f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 3 && output.details[0].name == "Abnormal",
+                   "minimum IoU below the threshold should preserve PatchCore details")) return 1;
+
+    context.patchcore_yolo_min_iou_threshold = 1.0f;
+    yolo.details = {yolo_detail_1};
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 2 && output.details[0].name == "Abnormal",
+                   "minimum IoU equal to the threshold should preserve PatchCore details")) return 1;
+
+    context.patchcore_yolo_min_iou_threshold = 0.0f;
+    yolo_detail_2.x = 80.0f;
+    yolo.details = {yolo_detail_1, yolo_detail_2};
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 3 && output.details[0].name == "Abnormal",
+                   "one non-overlapping YOLO detail should make the minimum IoU zero")) return 1;
+
+    yolo.has_detections = false;
+    yolo.details.clear();
     InspectionDLL::Internal::ComposeOutputWithDefectFilter(
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.size() == 1 && output.details[0].name == "Abnormal",
-                   "a filtered-out YOLO detection should not suppress PatchCore details")) return 1;
-
-    context.brightstripes_filter.confidence_threshold = 0.0f;
-    context.aa_filter.enable = true;
-    context.aa_filter.categories = {"BrightStripes"};
-    yolo.details[0].y = 680.0f;
-    yolo.details[0].w = 80.0f;
-    yolo.details[0].h = 20.0f;
-    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
-        patchcore, yolo, cv::Size(128, 800), gray, gray, output, context);
-    if (AssertTrue(output.yolo_score == 0.0f &&
-                   output.details.size() == 1 && output.details[0].name == "Abnormal",
-                   "AA-filtered YOLO details should not suppress PatchCore details")) return 1;
+                   "no YOLO details should always preserve PatchCore details")) return 1;
     return 0;
 }
 
@@ -313,6 +324,8 @@ int TestAaConfigParsing() {
                << "enabled=0\n"
                << "[patchcore]\n"
                << "enabled=0\n"
+               << "[post]\n"
+               << "patchcore_yolo_min_iou_threshold=0.25\n"
                << "[AA]\n"
                << "enabled=1\n"
                << "center_y_min=100.5\n"
@@ -338,6 +351,8 @@ int TestAaConfigParsing() {
     std::filesystem::remove(config_path, remove_error);
 
     if (AssertTrue(loaded, "AA config should load: " + error)) return 1;
+    if (AssertTrue(config.patchcore_yolo_min_iou_threshold == 0.25f,
+                   "PatchCore/YOLO minimum IoU threshold should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.enable, "AA config enabled flag should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.center_y_min == 100.5f &&
                    config.aa_filter.center_y_max == 200.5f,
@@ -471,7 +486,7 @@ int main() {
     if (TestAaYoloFilterRules()) return 1;
     if (TestAaConfigParsing()) return 1;
     if (TestContrastThresholdUsesCategoryDirection()) return 1;
-    if (TestPatchCoreDetailSuppressionWhenYoloDetected()) return 1;
+    if (TestPatchCoreMinimumYoloIouFiltering()) return 1;
     if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;

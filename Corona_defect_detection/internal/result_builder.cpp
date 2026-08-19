@@ -6,6 +6,7 @@
 #include "aa_yolo_filter.h"
 #include "dark_defect_refiner.h"
 #include "image_utils.h"
+#include "patchcore_yolo_iou_filter.h"
 
 namespace InspectionDLL::Internal {
 namespace {
@@ -45,11 +46,9 @@ void ComposeOutput(const PatchCoreDerived& pc,
         output.result = "OK";
     }
 
-    output.details.clear();
-    const bool include_patchcore_details =
-        !(context.suppress_patchcore_when_yolo_detected && has_yolo_detections);
+    std::vector<DetectionResult> pc_details;
 
-    if (include_patchcore_details && pc.has_crosshair_grid) {
+    if (pc.has_crosshair_grid) {
         std::vector<Component> comps = pc.crosshair_components;
         std::sort(comps.begin(), comps.end(),
                   [](const Component& a, const Component& b) {
@@ -81,13 +80,11 @@ void ComposeOutput(const PatchCoreDerived& pc,
             detail.contrast = contrast;
             detail.score = pc.score;
             detail.mask = pc.score_orig;
-            output.details.push_back(detail);
+            pc_details.push_back(detail);
         }
     }
 
-    if (has_yolo_detections && !pc.has_defect) {
-        output.details.insert(output.details.end(), yolo_details_filtered.begin(), yolo_details_filtered.end());
-    } else if (!has_yolo_detections && pc.has_defect && !pc.has_crosshair_grid) {
+    if (pc.has_defect && !pc.has_crosshair_grid) {
         DetectionResult detail;
         detail.name = "Abnormal";
         detail.area = pc.area;
@@ -98,23 +95,18 @@ void ComposeOutput(const PatchCoreDerived& pc,
         detail.contrast = pc.contrast;
         detail.score = pc.score;
         detail.mask = pc.area_orig;
-        output.details.push_back(detail);
-    } else if (has_yolo_detections && pc.has_defect) {
-        if (include_patchcore_details && !pc.has_crosshair_grid) {
-            DetectionResult detail;
-            detail.name = "Abnormal";
-            detail.area = pc.area;
-            detail.x = static_cast<float>(pc.x);
-            detail.y = static_cast<float>(pc.y);
-            detail.w = static_cast<float>(pc.w);
-            detail.h = static_cast<float>(pc.h);
-            detail.contrast = pc.contrast;
-            detail.score = pc.score;
-            detail.mask = pc.area_orig;
-            output.details.push_back(detail);
-        }
-        output.details.insert(output.details.end(), yolo_details_filtered.begin(), yolo_details_filtered.end());
+        pc_details.push_back(detail);
     }
+
+    ApplyPatchCoreYoloIouFilter(
+        pc_details,
+        yolo_details_filtered,
+        context.patchcore_yolo_min_iou_threshold);
+
+    output.details.clear();
+    output.details.reserve(pc_details.size() + yolo_details_filtered.size());
+    output.details.insert(output.details.end(), pc_details.begin(), pc_details.end());
+    output.details.insert(output.details.end(), yolo_details_filtered.begin(), yolo_details_filtered.end());
 }
 
 void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
@@ -159,8 +151,6 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
     }
     ApplyAaYoloFilter(yolo_details_filtered, context.aa_filter);
     const bool has_yolo_detections = !yolo_details_filtered.empty();
-    const bool include_patchcore_details =
-        !(context.suppress_patchcore_when_yolo_detected && has_yolo_detections);
 
     std::vector<DetectionResult> pc_details_filtered;
     const bool abnormal_enable = context.abnormal_filter.enable;
@@ -177,7 +167,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         (context.abnormal_filter.min_area <= 0 || pc.area >= context.abnormal_filter.min_area) &&
         PassContrastThreshold(pc.contrast, context.abnormal_filter.contrast_threshold, false);
 
-    if (include_patchcore_details && pc.has_crosshair_grid && abnormal_is_ng) {
+    if (pc.has_crosshair_grid && abnormal_is_ng) {
         std::vector<Component> comps = pc.crosshair_components;
         std::sort(comps.begin(), comps.end(),
                   [](const Component& a, const Component& b) {
@@ -219,7 +209,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
             detail.mask = pc.score_orig;
             pc_details_filtered.push_back(detail);
         }
-    } else if (include_patchcore_details && abnormal_pass_base) {
+    } else if (abnormal_pass_base) {
         if (pc.area > 0 && pc.w > 0 && pc.h > 0) {
             DetectionResult detail;
             detail.name = "Abnormal";
@@ -234,6 +224,11 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
             pc_details_filtered.push_back(detail);
         }
     }
+
+    ApplyPatchCoreYoloIouFilter(
+        pc_details_filtered,
+        yolo_details_filtered,
+        context.patchcore_yolo_min_iou_threshold);
 
     if (has_yolo_detections) {
         float max_score = 0.0f;
