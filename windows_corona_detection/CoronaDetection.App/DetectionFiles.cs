@@ -53,7 +53,7 @@ internal static class DetectionFiles
                 directory = Path.Combine(outputRoot, relative);
         }
         Directory.CreateDirectory(directory);
-        string baseName = Path.GetFileNameWithoutExtension(inputFile) + "_detect";
+        string baseName = Path.GetFileNameWithoutExtension(inputFile);
         string candidate = Path.Combine(directory, baseName + ".png");
         for (int i = 2; File.Exists(candidate); i++)
             candidate = Path.Combine(directory, $"{baseName}_{i}.png");
