@@ -9,7 +9,7 @@ namespace InspectionDLL::Internal {
 struct ResultComposeContext {
     float score_threshold = 1.4f;
     float dark_clusters_threshold = 0.8f;
-    float patchcore_yolo_min_iou_threshold = 0.0f;
+    float patchcore_yolo_iou_threshold = 0.0f;
     InspectionConfig::AaFilterConfig aa_filter;
     InspectionConfig::AbnormalFilterConfig abnormal_filter;
     InspectionConfig::CategoryFilterConfig stain_filter;

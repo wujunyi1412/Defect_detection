@@ -161,8 +161,8 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
     if (!ValidateNonNegative(out.patchcore_area_threshold, "patchcore.area_threshold", err)) return false;
     if (!ValidateNonNegative(out.patchcore_mask_area_threshold, "patchcore.mask_area_threshold", err)) return false;
     if (!ValidateNonNegative(out.dark_clusters_threshold, "post.dark_clusters_threshold", err)) return false;
-    if (out.patchcore_yolo_min_iou_threshold < 0.0f || out.patchcore_yolo_min_iou_threshold > 1.0f) {
-        err = "post.patchcore_yolo_min_iou_threshold must be in [0, 1]";
+    if (out.patchcore_yolo_iou_threshold < 0.0f || out.patchcore_yolo_iou_threshold > 1.0f) {
+        err = "post.patchcore_yolo_iou_threshold must be in [0, 1]";
         return false;
     }
     if (!ValidateColorChannel(out.defect_mask_color_r, "post.defect_mask_color_r", err)) return false;
@@ -284,11 +284,11 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.patchcore_area_threshold = GetFloatOr(ini, "patchcore", "area_threshold", out.patchcore_area_threshold);
     out.patchcore_mask_area_threshold = GetFloatOr(ini, "patchcore", "mask_area_threshold", out.patchcore_mask_area_threshold);
     out.dark_clusters_threshold = GetFloatOr(ini, "post", "dark_clusters_threshold", out.dark_clusters_threshold);
-    out.patchcore_yolo_min_iou_threshold = GetFloatOr(
+    out.patchcore_yolo_iou_threshold = GetFloatOr(
         ini,
         "post",
-        "patchcore_yolo_min_iou_threshold",
-        out.patchcore_yolo_min_iou_threshold);
+        "patchcore_yolo_iou_threshold",
+        out.patchcore_yolo_iou_threshold);
     out.draw_defect_box = GetBoolOr(ini, "post", "draw_defect_box", out.draw_defect_box);
     out.expand_defect_box = GetBoolOr(ini, "post", "expand_defect_box", out.expand_defect_box);
     out.draw_box_details = GetBoolOr(ini, "post", "draw_box_details", out.draw_box_details);

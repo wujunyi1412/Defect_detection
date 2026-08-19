@@ -101,7 +101,7 @@ void ComposeOutput(const PatchCoreDerived& pc,
     ApplyPatchCoreYoloIouFilter(
         pc_details,
         yolo_details_filtered,
-        context.patchcore_yolo_min_iou_threshold);
+        context.patchcore_yolo_iou_threshold);
 
     output.details.clear();
     output.details.reserve(pc_details.size() + yolo_details_filtered.size());
@@ -228,7 +228,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
     ApplyPatchCoreYoloIouFilter(
         pc_details_filtered,
         yolo_details_filtered,
-        context.patchcore_yolo_min_iou_threshold);
+        context.patchcore_yolo_iou_threshold);
 
     if (has_yolo_detections) {
         float max_score = 0.0f;

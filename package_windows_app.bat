@@ -8,7 +8,7 @@ set "APP_PROJECT=%PROJECT_ROOT%\windows_corona_detection\CoronaDetection.App\Cor
 set "PACKAGE_ROOT=%PROJECT_ROOT%\windows_corona_detection\package"
 set "APP_VERSION="
 for /f "tokens=2,3 delims=<>" %%A in ('findstr /C:"<Version>" "%APP_PROJECT%"') do set "APP_VERSION=%%B"
-if not defined APP_VERSION set "APP_VERSION=1.0.0"
+if not defined APP_VERSION set "APP_VERSION=1.0.1"
 set "PACKAGE_DIR=%PACKAGE_ROOT%\CoronaDetection_%APP_VERSION%_win-x64"
 
 pushd "%PROJECT_ROOT%" || goto :error

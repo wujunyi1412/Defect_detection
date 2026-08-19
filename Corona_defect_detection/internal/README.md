@@ -92,7 +92,7 @@ inference_dll.cpp (主控)
 1. **YOLO 过滤**：按 `CategoryFilterConfig`（enable / confidence / contrast / min_size）逐类别过滤，Stain/DarkClusters 额外调用 `RefineDarkDefectGeometryOnly` 精修
 2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤。`contrast_threshold > 0` 时，Stain/DarkClusters 仅保留 `contrast < threshold`，BrightStripes/LineArtifacts/PatchCore Abnormal 保留 `contrast >= threshold`；配置为 `0` 时关闭对比度过滤
 3. **AA 后过滤**：标准 YOLO 过滤后，`aa_yolo_filter` 包含两条独立规则：“中心 Y + 最小宽高比”和“左上角 X/Y + 宽/高范围”。两条规则分别由 `[AA]` 开关控制，任一启用规则命中就移除该 YOLO 结果
-4. **PatchCore/YOLO IoU 过滤**：对每条已通过过滤的 PatchCore `Abnormal`，计算它与全部最终 YOLO 框的 IoU；仅当最小 IoU 严格大于 `post.patchcore_yolo_min_iou_threshold` 时移除该 PatchCore 明细。没有 YOLO 时始终保留，阈值设为 `1` 可关闭此过滤
+4. **PatchCore/YOLO IoU 过滤**：对每条已通过过滤的 PatchCore `Abnormal`，计算它与全部最终 YOLO 框的 IoU；任一 IoU 严格大于 `post.patchcore_yolo_iou_threshold` 时移除该 PatchCore 明细。没有 YOLO 时始终保留，阈值设为 `1` 可关闭此过滤
 5. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
 
 ---

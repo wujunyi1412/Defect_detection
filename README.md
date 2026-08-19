@@ -106,7 +106,7 @@ mask_area_threshold = 0.3
 
 [post]           # 后处理
 dark_clusters_threshold = 0.8
-patchcore_yolo_min_iou_threshold = 0.0  # PatchCore 与全部最终 YOLO 框的最小 IoU 严格大于此值时移除；范围 0~1，设为 1 可关闭
+patchcore_yolo_iou_threshold = 0.0  # PatchCore 与任一最终 YOLO 框的 IoU 严格大于此值时移除；范围 0~1，设为 1 可关闭
 concat_original_image = 0  # 1：输出“左原图、右标注图”；0：仅输出标注图
 
 [AA]             # YOLO 最终结果的可配置区域/形状过滤

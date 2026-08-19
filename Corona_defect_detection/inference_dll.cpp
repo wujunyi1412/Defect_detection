@@ -40,7 +40,7 @@ public:
     float area_threshold_ = 1.4f;
     float mask_area_threshold_ = 0.01f;
     float dark_clusters_threshold_ = 0.8f;
-    float patchcore_yolo_min_iou_threshold_ = 0.0f;
+    float patchcore_yolo_iou_threshold_ = 0.0f;
     bool draw_defect_box_ = true;
     bool expand_defect_box_ = false;
     bool draw_box_details_ = true;
@@ -72,7 +72,7 @@ public:
         Internal::ResultComposeContext context;
         context.score_threshold = score_threshold_;
         context.dark_clusters_threshold = dark_clusters_threshold_;
-        context.patchcore_yolo_min_iou_threshold = patchcore_yolo_min_iou_threshold_;
+        context.patchcore_yolo_iou_threshold = patchcore_yolo_iou_threshold_;
         context.abnormal_filter = abnormal_filter_;
         context.stain_filter = stain_filter_;
         context.darkclusters_filter = darkclusters_filter_;
@@ -118,7 +118,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->area_threshold_ = config.patchcore_area_threshold;
     pImpl->mask_area_threshold_ = config.patchcore_mask_area_threshold;
     pImpl->dark_clusters_threshold_ = config.dark_clusters_threshold;
-    pImpl->patchcore_yolo_min_iou_threshold_ = config.patchcore_yolo_min_iou_threshold;
+    pImpl->patchcore_yolo_iou_threshold_ = config.patchcore_yolo_iou_threshold;
     pImpl->draw_defect_box_ = config.draw_defect_box;
     pImpl->expand_defect_box_ = config.expand_defect_box;
     pImpl->draw_box_details_ = config.draw_box_details;
