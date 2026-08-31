@@ -93,6 +93,7 @@ static void NMSBoxesByClass(
     const std::vector<BoxF>& boxes,
     const std::vector<float>& scores,
     const std::vector<int>& class_ids,
+    int num_classes,
     float score_threshold,
     float iou_threshold,
     std::vector<int>& indices)
@@ -100,13 +101,12 @@ static void NMSBoxesByClass(
     indices.clear();
 
     const int n = static_cast<int>(boxes.size());
-    if (n == 0 || scores.size() != boxes.size() || class_ids.size() != boxes.size())
+    if (n == 0 || num_classes <= 0 || scores.size() != boxes.size() || class_ids.size() != boxes.size())
     {
         return;
     }
 
-    constexpr int kNumClasses = 3;
-    for (int cls = 0; cls < kNumClasses; ++cls)
+    for (int cls = 0; cls < num_classes; ++cls)
     {
         std::vector<BoxF> cls_boxes;
         std::vector<float> cls_scores;
@@ -362,7 +362,14 @@ void YOLOv8Segmentor::Postprocess(
     // NMS
     std::vector<int> indices;
     if (nms_mode_ == NmsMode::ClassAware) {
-        NMSBoxesByClass(boxes_orig, confidences, class_ids, score_threshold_, iou_threshold_, indices);
+        NMSBoxesByClass(
+            boxes_orig,
+            confidences,
+            class_ids,
+            NUM_CLASSES,
+            score_threshold_,
+            iou_threshold_,
+            indices);
     } else {
         NMSBoxes(boxes_orig, confidences, score_threshold_, iou_threshold_, indices);
     }
