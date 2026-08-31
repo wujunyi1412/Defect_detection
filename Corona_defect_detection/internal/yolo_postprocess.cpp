@@ -11,7 +11,7 @@ namespace InspectionDLL::Internal {
 namespace {
 
 ContrastPolarity GetYoloContrastPolarity(const std::string& defect_name) {
-    if (defect_name == "Stain" || defect_name == "DarkClusters") {
+    if (defect_name == "Stain") {
         return ContrastPolarity::Dark;
     }
     if (defect_name == "BrightStripes") {
@@ -23,8 +23,7 @@ ContrastPolarity GetYoloContrastPolarity(const std::string& defect_name) {
 }  // namespace
 
 YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
-                        const cv::Mat& gray_yolo,
-                        float dark_clusters_threshold) {
+                        const cv::Mat& gray_yolo) {
     YoloDerived result;
     result.has_detections = false;
     result.score = 0.0f;
@@ -83,12 +82,6 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
 
         detail.contrast = CalculateContrastRatioAdaptive(gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
                                                  GetYoloContrastPolarity(detail.name));
-
-        if (detail.name == "Stain" &&
-            IsContrastRatioValid(detail.contrast) &&
-            detail.contrast <= dark_clusters_threshold) {
-            detail.name = "DarkClusters";
-        }
 
         result.details.push_back(detail);
     }

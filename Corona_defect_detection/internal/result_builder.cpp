@@ -12,7 +12,7 @@ namespace InspectionDLL::Internal {
 namespace {
 
 bool IsDarkDefectCategory(const std::string& name) {
-    return name == "Stain" || name == "DarkClusters";
+    return name == "Stain";
 }
 
 bool PassContrastThreshold(float contrast, float threshold, bool keep_below_threshold) {
@@ -121,22 +121,14 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
     for (const auto& d : yolo.details) {
         const InspectionConfig::CategoryFilterConfig* cf = nullptr;
         if (d.name == "Stain") cf = &context.stain_filter;
-        else if (d.name == "DarkClusters") cf = &context.darkclusters_filter;
         else if (d.name == "BrightStripes") cf = &context.brightstripes_filter;
         else if (d.name == "LineArtifacts") cf = &context.lineartifacts_filter;
 
         if (!cf) continue;
 
         DetectionResult detail = d;
-        if ((detail.name == "Stain" || detail.name == "DarkClusters") && cf->use_traditional_measure) {
-            if (RefineDarkDefectGeometryAdaptive(gray_yolo, detail)) {
-                if (IsContrastRatioValid(detail.contrast)) {
-                    detail.name = detail.contrast <= context.dark_clusters_threshold
-                                      ? "DarkClusters"
-                                      : "Stain";
-                    cf = detail.name == "Stain" ? &context.stain_filter : &context.darkclusters_filter;
-                }
-            }
+        if (detail.name == "Stain" && cf->use_traditional_measure) {
+            RefineDarkDefectGeometryAdaptive(gray_yolo, detail);
         }
         if (!cf->enable) continue;
         if (detail.score < cf->confidence_threshold) continue;

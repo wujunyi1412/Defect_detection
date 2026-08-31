@@ -376,9 +376,6 @@
                                 <CheckBox x:Name="IgnorePredictionAbnormalCheck"
                                           Content="忽略预测 Abnormal" IsChecked="False"
                                           VerticalAlignment="Center" Margin="0,0,28,0"/>
-                                <CheckBox x:Name="MapDarkClustersToStainCheck"
-                                          Content="预测 DarkClusters 按 Stain 统计" IsChecked="False"
-                                          VerticalAlignment="Center" Margin="0,0,28,0"/>
                                 <TextBlock Text="规则仅作用于预测标签，并记录在 overall_metrics.csv"
                                            Foreground="#687384" VerticalAlignment="Center"/>
                             </StackPanel>

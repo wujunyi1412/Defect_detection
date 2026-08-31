@@ -92,15 +92,10 @@ internal sealed class PredictionLabelRules(
                 : prediction)
             .ToList();
 
-    public static PredictionLabelRules FromUiOptions(
-        bool ignoreAbnormal,
-        bool mapDarkClustersToStain)
+    public static PredictionLabelRules FromUiOptions(bool ignoreAbnormal)
     {
         string[] ignored = ignoreAbnormal ? ["Abnormal"] : [];
-        KeyValuePair<string, string>[] mappings = mapDarkClustersToStain
-            ? [new KeyValuePair<string, string>("DarkClusters", "Stain")]
-            : [];
-        return new PredictionLabelRules(ignored, mappings);
+        return new PredictionLabelRules(ignored);
     }
 }
 

@@ -127,7 +127,7 @@ CalculateContrastRatioAdaptive()
 计算前景/背景灰度比
    |
    v
-根据 contrast 判断 Stain / DarkClusters
+保持 Stain 类别
    |
    v
 use_traditional_measure == 1 ?
@@ -135,7 +135,7 @@ use_traditional_measure == 1 ?
    +-- 是 --> RefineDarkDefectGeometryAdaptive()
    |           更新 x、y、w、h、area
    |           用最终连通域 mask 重新计算 contrast
-   |           按新 contrast 重新判断 Stain / DarkClusters
+   |           保持 Stain 类别
    |
    +-- 否 --> 保留 YOLO 几何和初次 contrast
    |
@@ -149,11 +149,11 @@ min_width、min_height、min_area 过滤
 
 一个非常重要的细节：**对比度最多会计算两次。**
 
-第一次在 YOLO 后处理阶段使用 YOLO mask，目的是获得初始对比度和初始 `Stain/DarkClusters` 类别。若传统几何细化成功，第二次直接使用细化函数内部的最终连通域 mask 重新计算。因此：
+第一次在 YOLO 后处理阶段使用 YOLO mask 获得初始对比度。若传统几何细化成功，第二次直接使用细化函数内部的最终连通域 mask 重新计算。因此：
 
 - 未启用细化或细化失败：`contrast` 来自 YOLO mask。
 - 细化成功：`x/y/w/h/area/contrast` 都来自同一个最终连通域。
-- 细化成功后会按新 `contrast` 重新判断 `Stain/DarkClusters`。
+- 细化成功后类别仍保持为 `Stain`。
 - 对比度阈值和尺寸阈值都检查最终结果。
 
 ---
@@ -517,7 +517,7 @@ YOLO mask 可能比真实缺陷稍大，包含一些接近正常背景的像素�
 ContrastPolarity::Dark
 ```
 
-明确按暗缺陷统计，适合 `Stain` 和 `DarkClusters`。
+明确按暗缺陷统计，适合 `Stain`。
 
 ```cpp
 ContrastPolarity::Bright
@@ -546,8 +546,7 @@ ContrastPolarity::Auto
 - 背景平面拟合失败。
 - 预测背景接近零，除法不安全。
 
-只有计算成功时才会用 contrast 重分类。合法的 `contrast=0` 会归为 `DarkClusters`；
-`contrast=NaN` 不参与 `Stain/DarkClusters` 重分类。
+合法的 `contrast=0` 表示极暗结果；`contrast=NaN` 表示计算失败。两者都不会改变 `Stain` 类别。
 
 ---
 
@@ -582,7 +581,7 @@ mask 面积：120
 新面积：16
 ```
 
-找到最终连通域后，函数使用这个精确 mask 再计算一次对比度。例如初始 YOLO mask 偏大时得到 `0.78`，细化后的真实黑点可能得到 `0.62`。最终保留 `0.62`，并用它重新判断 `Stain/DarkClusters`。
+找到最终连通域后，函数使用这个精确 mask 再计算一次对比度。例如初始 YOLO mask 偏大时得到 `0.78`，细化后的真实黑点可能得到 `0.62`。最终保留 `0.62`，类别仍为 `Stain`。
 
 最终输出可能是：
 
@@ -608,7 +607,6 @@ CalculateContrastRatioAdaptive(...)
 它会影响：
 
 - 输出的 `detail.contrast`。
-- `Stain` 是否按阈值变为 `DarkClusters`。
 - 后续 `contrast_threshold` 过滤。
 
 ### 6.2 PatchCore 主结果对比度
@@ -620,7 +618,7 @@ CalculateContrastRatioAdaptive(...)
 `result_builder.cpp` 在满足以下条件时调用新细化函数：
 
 ```text
-类别是 Stain 或 DarkClusters
+类别是 Stain
 并且 use_traditional_measure=1
 ```
 
@@ -755,12 +753,7 @@ min_height=5
 
 新旧函数的含义都是前景灰度除以背景灰度，但采样和稳健统计方法不同，数值可能发生变化。
 
-特别是：
-
-```ini
-dark_clusters_threshold=0.8
-contrast_threshold=...
-```
+特别是 `contrast_threshold`。
 
 建议使用一批已标注样本统计新函数的数值分布后再确定阈值，不要只凭一两张图设置。
 

@@ -53,7 +53,6 @@ int32_t DefectNameToIndex(const char* name) {
     if (EqualsIgnoreCase(name, "Stain")) return static_cast<int32_t>(Defect_name::Stain);
     if (EqualsIgnoreCase(name, "BrightStripes")) return static_cast<int32_t>(Defect_name::BrightStripes);
     if (EqualsIgnoreCase(name, "LineArtifacts")) return static_cast<int32_t>(Defect_name::LineArtifacts);
-    if (EqualsIgnoreCase(name, "DarkClusters")) return static_cast<int32_t>(Defect_name::DarkClusters);
     return -1;
 }
 
@@ -501,16 +500,6 @@ INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetThresholds(
     auto* eng = ToEngine(handle);
     if (!eng) return;
     eng->SetThresholds(score_thresh, area_thresh, mask_area_thresh);
-}
-
-// 设置暗区聚类阈值
-INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetDarkClustersThreshold(
-    InspectionHandle handle,
-    float dark_clusters_thresh
-) {
-    auto* eng = ToEngine(handle);
-    if (!eng) return;
-    eng->SetDarkClustersThreshold(dark_clusters_thresh);
 }
 
 // 设置YOLO NMS模式（是否类别感知）

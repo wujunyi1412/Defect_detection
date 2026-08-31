@@ -39,7 +39,6 @@ public:
     float score_threshold_ = 1.4f;
     float area_threshold_ = 1.4f;
     float mask_area_threshold_ = 0.01f;
-    float dark_clusters_threshold_ = 0.8f;
     float patchcore_yolo_iou_threshold_ = 0.0f;
     bool draw_defect_box_ = true;
     bool expand_defect_box_ = false;
@@ -52,7 +51,6 @@ public:
 
     AbnormalFilter abnormal_filter_;
     CategoryFilter stain_filter_;
-    CategoryFilter darkclusters_filter_;
     CategoryFilter brightstripes_filter_;
     CategoryFilter lineartifacts_filter_;
     InspectionConfig::AaFilterConfig aa_filter_;
@@ -71,11 +69,9 @@ public:
     Internal::ResultComposeContext BuildComposeContext() const {
         Internal::ResultComposeContext context;
         context.score_threshold = score_threshold_;
-        context.dark_clusters_threshold = dark_clusters_threshold_;
         context.patchcore_yolo_iou_threshold = patchcore_yolo_iou_threshold_;
         context.abnormal_filter = abnormal_filter_;
         context.stain_filter = stain_filter_;
-        context.darkclusters_filter = darkclusters_filter_;
         context.brightstripes_filter = brightstripes_filter_;
         context.lineartifacts_filter = lineartifacts_filter_;
         context.aa_filter = aa_filter_;
@@ -117,7 +113,6 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->score_threshold_ = config.patchcore_score_threshold;
     pImpl->area_threshold_ = config.patchcore_area_threshold;
     pImpl->mask_area_threshold_ = config.patchcore_mask_area_threshold;
-    pImpl->dark_clusters_threshold_ = config.dark_clusters_threshold;
     pImpl->patchcore_yolo_iou_threshold_ = config.patchcore_yolo_iou_threshold;
     pImpl->draw_defect_box_ = config.draw_defect_box;
     pImpl->expand_defect_box_ = config.expand_defect_box;
@@ -133,7 +128,6 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
 
     pImpl->abnormal_filter_ = config.abnormal_filter;
     pImpl->stain_filter_ = config.stain_filter;
-    pImpl->darkclusters_filter_ = config.darkclusters_filter;
     pImpl->brightstripes_filter_ = config.brightstripes_filter;
     pImpl->lineartifacts_filter_ = config.lineartifacts_filter;
     pImpl->aa_filter_ = config.aa_filter;
@@ -252,10 +246,7 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
         timing.patchcore_post_ms = postprocess_timer.RestartMilliseconds();
         Internal::YoloDerived yolo;
         if (yolo_success) {
-            yolo = Internal::AnalyzeYolo(
-                yolo_detections,
-                images.yolo_gray,
-                pImpl->dark_clusters_threshold_);
+            yolo = Internal::AnalyzeYolo(yolo_detections, images.yolo_gray);
         }
         timing.yolo_post_ms = postprocess_timer.RestartMilliseconds();
 
@@ -319,12 +310,6 @@ void InspectionEngine::SetThresholds(float score_thresh, float area_thresh, floa
     pImpl->area_threshold_ = area_thresh;
     pImpl->mask_area_threshold_ = mask_area_thresh;
     InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime thresholds updated");
-}
-
-// 设置暗区聚类阈值
-void InspectionEngine::SetDarkClustersThreshold(float dark_clusters_thresh) {
-    pImpl->dark_clusters_threshold_ = dark_clusters_thresh;
-    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, "runtime dark_clusters_threshold updated");
 }
 
 // 设置YOLO NMS模式（是否类别感知）

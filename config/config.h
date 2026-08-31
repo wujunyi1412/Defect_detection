@@ -31,7 +31,7 @@ struct AaFilterConfig {
     float center_y_min = 665.0f;
     float center_y_max = 715.0f;
     float min_width_height_ratio = 3.0f;
-    std::vector<std::string> categories = {"Stain", "DarkClusters"};
+    std::vector<std::string> categories = {"Stain"};
 
     bool position_filter_enable = false;
     float position_x_min = 430.0f;
@@ -42,7 +42,7 @@ struct AaFilterConfig {
     float position_width_max = 200.0f;
     float position_height_min = 175.0f;
     float position_height_max = 245.0f;
-    std::vector<std::string> position_categories = {"Stain", "DarkClusters"};
+    std::vector<std::string> position_categories = {"Stain"};
 };
 
 struct InspectionConfigData {
@@ -59,7 +59,6 @@ struct InspectionConfigData {
     float patchcore_score_threshold = 1.4f;
     float patchcore_area_threshold = 1.4f;
     float patchcore_mask_area_threshold = 0.3f;
-    float dark_clusters_threshold = 0.8f;
     float patchcore_yolo_iou_threshold = 0.0f;
     bool draw_defect_box = true;
     bool expand_defect_box = false;
@@ -78,7 +77,6 @@ struct InspectionConfigData {
     AaFilterConfig aa_filter;
     AbnormalFilterConfig abnormal_filter;
     CategoryFilterConfig stain_filter;
-    CategoryFilterConfig darkclusters_filter;
     CategoryFilterConfig brightstripes_filter;
     CategoryFilterConfig lineartifacts_filter;
 };

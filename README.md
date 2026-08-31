@@ -6,7 +6,7 @@
 
 采用 **双模型协同** 策略：
 
-- **YOLOv8-seg** — 检测已知缺陷类型（Stain 污点、BrightStripes 亮条纹、LineArtifacts 线状伪影、DarkClusters 暗色簇），输出分割 mask 和边界框
+- **YOLOv8-seg** — 检测已知缺陷类型（Stain 污点、BrightStripes 亮条纹、LineArtifacts 线状伪影），输出分割 mask 和边界框
 - **PatchCore + Faiss** — 基于正常样本特征分布的异常检测，捕获未知异常模式
 
 两者结果通过可配置的类别过滤器融合，输出结构化的检测结果。对外提供 C API，可通过 P/Invoke 由 C# 上位机调用。
@@ -105,7 +105,6 @@ area_threshold = 1.4
 mask_area_threshold = 0.3
 
 [post]           # 后处理
-dark_clusters_threshold = 0.8
 patchcore_yolo_iou_threshold = 0.0  # PatchCore 与任一最终 YOLO 框的 IoU 严格大于此值时移除；范围 0~1，设为 1 可关闭
 concat_original_image = 0  # 1：输出“左原图、右标注图”；0：仅输出标注图
 
@@ -114,9 +113,9 @@ enabled = 1
 center_y_min = 665
 center_y_max = 715
 min_width_height_ratio = 3.0
-categories = Stain,DarkClusters
+categories = Stain
 position_filter_enabled = 1
-position_categories = Stain,DarkClusters
+position_categories = Stain
 position_x_min = 430
 position_x_max = 480
 position_y_min = 280
@@ -128,7 +127,6 @@ position_height_max = 245
 
 [Abnormal_config]     # Abnormal 缺陷过滤器
 [Stain_config]        # Stain 缺陷过滤器
-[Darkclusters_config] # DarkClusters 缺陷过滤器
 [Brightstripes_config]# BrightStripes 缺陷过滤器
 [Lineartifacts_config]# LineArtifacts 缺陷过滤器
 ```
@@ -187,4 +185,3 @@ struct InferenceResult {
 | Stain | YOLOv8 | 污点 |
 | BrightStripes | YOLOv8 | 亮条纹 |
 | LineArtifacts | YOLOv8 | 线状伪影 |
-| DarkClusters | YOLOv8 | 暗色簇 |

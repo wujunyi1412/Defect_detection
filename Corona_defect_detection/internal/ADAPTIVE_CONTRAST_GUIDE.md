@@ -1058,7 +1058,7 @@ YOLO mask 可能比真实缺陷稍大。
 
 当前项目中：
 
-- `Stain`、`DarkClusters` 明确传入 `Dark`。
+- `Stain` 明确传入 `Dark`。
 - `BrightStripes` 明确传入 `Bright`。
 - PatchCore 某些调用使用默认 `Auto`。
 
@@ -1331,29 +1331,10 @@ if (float.IsNaN(contrast)) {
 
 ## 35. 真实 0 和计算失败对分类有什么影响
 
-YOLO 后处理中有逻辑：
-
-```text
-contrast计算成功，并且
-Stain 且 contrast <= dark_clusters_threshold
-→ DarkClusters
-```
-
-当前默认：
-
-```ini
-dark_clusters_threshold=0.8
-```
-
-所以：
-
-- `contrast=0.65`：可能变为 `DarkClusters`。
-- `contrast=0`：是合法的极暗结果，也会变为 `DarkClusters`。
-- `contrast=0.90`：通常保留为 `Stain`。
-- `contrast=NaN`：表示失败，不参与 `Stain/DarkClusters` 重分类。
+当前 YOLO 后处理不再根据 contrast 重分类，`Stain` 始终保持为 `Stain`。`contrast=0` 是合法的极暗结果，`contrast=NaN` 表示计算失败。
 
 当 `contrast_threshold=0` 时表示关闭对比度过滤，`NaN` 不会仅因该阈值被过滤。
-当 `contrast_threshold>0` 时，Stain/DarkClusters 仅保留严格满足 `contrast < contrast_threshold` 的结果；BrightStripes/LineArtifacts/PatchCore Abnormal 保留 `contrast >= contrast_threshold` 的结果。所有类别的 `NaN` 都不能通过对比度过滤。
+当 `contrast_threshold>0` 时，Stain 仅保留严格满足 `contrast < contrast_threshold` 的结果；BrightStripes/LineArtifacts/PatchCore Abnormal 保留 `contrast >= contrast_threshold` 的结果。所有类别的 `NaN` 都不能通过对比度过滤。
 
 ---
 
@@ -1379,7 +1360,7 @@ YOLO检测框
 结果用于：
 
 - `detail.contrast`。
-- 初次判断 `Stain/DarkClusters`。
+- 保持 `Stain` 原始类别。
 - 后续类别过滤。
 
 ---
@@ -1449,7 +1430,7 @@ Dark极性
 ```text
 YOLO mask
 → 得到初始contrast
-→ 初步判断Stain/DarkClusters
+→ 保持原始类别
 ```
 
 第二次仅在小框细化成功后：
@@ -1457,7 +1438,6 @@ YOLO mask
 ```text
 最终传统连通域mask
 → 得到更准确contrast
-→ 重新判断Stain/DarkClusters
 → 使用最终contrast_threshold过滤
 ```
 
@@ -1590,15 +1570,9 @@ x、y、w、h、area、contrast
 
 YOLO mask 可能包含正常背景，使旧比值接近 `1`。细化后的 mask 更贴近黑点，所以新比值可能明显下降。
 
-### 43.7 为什么细化后类别会变化
+### 43.7 细化后类别是否变化
 
-最终 contrast 会重新与：
-
-```ini
-dark_clusters_threshold
-```
-
-比较，所以 `Stain` 可能变成 `DarkClusters`，反之也可能重新变为 `Stain`。
+不会变化。细化只更新 `x/y/w/h/area/contrast`，`Stain` 仍保持为 `Stain`。
 
 ---
 
@@ -1642,7 +1616,6 @@ dark_clusters_threshold
 ```text
 正常误检样本contrast
 Stain样本contrast
-DarkClusters样本contrast
 BrightStripes样本contrast
 靠黑边样本contrast
 1～4px小点contrast
@@ -1652,7 +1625,6 @@ BrightStripes样本contrast
 观察分布后再设置：
 
 ```ini
-dark_clusters_threshold
 contrast_threshold
 ```
 

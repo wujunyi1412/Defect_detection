@@ -16,7 +16,7 @@
 
 #define INSPECTION_MAX_DETECTIONS 128
 #define INSPECTION_MAX_NAME_LEN 32
-#define INSPECTION_DETECT_CATEGORIES 5
+#define INSPECTION_DETECT_CATEGORIES 4
 
 
 #define INSPECTION_RESULT_OK 0
@@ -43,7 +43,6 @@ enum class Defect_name {
     Stain = 1,
     BrightStripes = 2,
     LineArtifacts = 3,
-    DarkClusters = 4,
 };
 
 typedef void* InspectionHandle;
@@ -128,11 +127,6 @@ INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetThresholds(
     float score_thresh,
     float area_thresh,
     float mask_area_thresh
-);
-
-INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetDarkClustersThreshold(
-    InspectionHandle handle,
-    float dark_clusters_thresh
 );
 
 INSPECTION_C_EXPORT void INSPECTION_CALL Inspection_SetYoloNmsMode(

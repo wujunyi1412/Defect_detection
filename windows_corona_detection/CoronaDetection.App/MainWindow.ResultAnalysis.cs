@@ -83,8 +83,7 @@ public partial class MainWindow
                     RecursiveAnalysisCheck.IsChecked == true,
                     OverwriteAnalysisCheck.IsChecked == true,
                     PredictionLabelRules.FromUiOptions(
-                        IgnorePredictionAbnormalCheck.IsChecked == true,
-                        MapDarkClustersToStainCheck.IsChecked == true),
+                        IgnorePredictionAbnormalCheck.IsChecked == true),
                     EvaluateByClassCheck.IsChecked == true),
                 progress,
                 _analysisCancellation.Token);
@@ -210,7 +209,6 @@ public partial class MainWindow
         RecursiveAnalysisCheck.IsEnabled = !busy;
         OverwriteAnalysisCheck.IsEnabled = !busy;
         IgnorePredictionAbnormalCheck.IsEnabled = !busy;
-        MapDarkClustersToStainCheck.IsEnabled = !busy;
         EvaluateByClassCheck.IsEnabled = !busy;
         OpenAnalysisOutputButton.IsEnabled = !busy;
         StartButton.IsEnabled = !busy && !_busy;

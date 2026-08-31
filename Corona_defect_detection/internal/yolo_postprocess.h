@@ -16,7 +16,6 @@ struct YoloDerived {
 };
 
 YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
-                        const cv::Mat& gray_yolo,
-                        float dark_clusters_threshold);
+                        const cv::Mat& gray_yolo);
 
 }  // namespace InspectionDLL::Internal

@@ -53,8 +53,6 @@ public:
     
     DLL_EXPORT void SetThresholds(float score_thresh, float area_thresh, float mask_area_thresh);
 
-    DLL_EXPORT void SetDarkClustersThreshold(float dark_clusters_thresh);
-
     DLL_EXPORT void SetYoloNmsMode(bool class_aware);
 
     DLL_EXPORT bool ShouldDrawDefectBox() const;

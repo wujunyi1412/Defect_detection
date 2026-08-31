@@ -31,7 +31,6 @@ std::string ToLowerCopy(std::string value) {
 std::string CanonicalAaCategory(const std::string& category) {
     const std::string lowered = ToLowerCopy(TrimCopy(category));
     if (lowered == "stain") return "Stain";
-    if (lowered == "darkclusters") return "DarkClusters";
     if (lowered == "brightstripes") return "BrightStripes";
     if (lowered == "lineartifacts") return "LineArtifacts";
     return {};
@@ -160,7 +159,6 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
     if (!ValidateNonNegative(out.patchcore_score_threshold, "patchcore.score_threshold", err)) return false;
     if (!ValidateNonNegative(out.patchcore_area_threshold, "patchcore.area_threshold", err)) return false;
     if (!ValidateNonNegative(out.patchcore_mask_area_threshold, "patchcore.mask_area_threshold", err)) return false;
-    if (!ValidateNonNegative(out.dark_clusters_threshold, "post.dark_clusters_threshold", err)) return false;
     if (out.patchcore_yolo_iou_threshold < 0.0f || out.patchcore_yolo_iou_threshold > 1.0f) {
         err = "post.patchcore_yolo_iou_threshold must be in [0, 1]";
         return false;
@@ -283,7 +281,6 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     out.patchcore_score_threshold = GetFloatOr(ini, "patchcore", "score_threshold", out.patchcore_score_threshold);
     out.patchcore_area_threshold = GetFloatOr(ini, "patchcore", "area_threshold", out.patchcore_area_threshold);
     out.patchcore_mask_area_threshold = GetFloatOr(ini, "patchcore", "mask_area_threshold", out.patchcore_mask_area_threshold);
-    out.dark_clusters_threshold = GetFloatOr(ini, "post", "dark_clusters_threshold", out.dark_clusters_threshold);
     out.patchcore_yolo_iou_threshold = GetFloatOr(
         ini,
         "post",
@@ -309,7 +306,6 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
 
     out.abnormal_filter = LoadAbnormalFilter(ini);
     out.stain_filter = LoadCategoryFilter(ini, "stain_config");
-    out.darkclusters_filter = LoadCategoryFilter(ini, "darkclusters_config");
     out.brightstripes_filter = LoadCategoryFilter(ini, "brightstripes_config");
     out.lineartifacts_filter = LoadCategoryFilter(ini, "lineartifacts_config");
     out.aa_filter = LoadAaFilter(ini);

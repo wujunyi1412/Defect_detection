@@ -1101,7 +1101,7 @@ response>=较低阈值 → 弱生长区域
   ↓
 用最终 mask 重新计算 contrast
   ↓
-重新判断 Stain / DarkClusters
+保持 Stain 类别
   ↓
 执行 contrast、宽、高、面积过滤
 ```

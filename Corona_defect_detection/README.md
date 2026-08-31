@@ -64,7 +64,7 @@ Corona_defect_detection/
   2. 双模型并行推理
   3. 后处理（`AnalyzePatchCore` / `AnalyzeYolo`）
   4. 结果融合（`ComposeOutputWithDefectFilter`）
-- `SetThresholds` / `SetDarkClustersThreshold` / `SetYoloNmsMode` — 运行时动态调整参数
+- `SetThresholds` / `SetYoloNmsMode` — 运行时动态调整参数
 - `ProcessImagePath` — 从文件路径读取图像
 - `ProcessFloatArry` — 从 float 数组构造 cv::Mat（兼容外部内存）
 
@@ -122,12 +122,11 @@ Corona_defect_detection/
 [AA]              # YOLO 最终结果的可配置区域/形状过滤
 [Abormal_config]  # Abnormal 类别过滤器（双阈值：score + area）
 [Stain_config]    # Stain 类别过滤器（含传统精修开关）
-[Darkclusters_config]
 [Brightstripes_config]
 [Lineartifacts_config]
 ```
 
-每个类别过滤器包含：`Enable`、`confidence_threshold`、`contrast_threshold`、`min_width/height/area`。Stain/DarkClusters 额外支持 `use_traditional_measure`（启用 `RefineDarkDefectGeometryOnly` 精修）。
+每个类别过滤器包含：`Enable`、`confidence_threshold`、`contrast_threshold`、`min_width/height/area`。Stain 额外支持 `use_traditional_measure`（启用传统图像精修）。
 
 ### 6. internal/ — 后处理模块
 
@@ -168,7 +167,7 @@ Inspection_ProcessFloatArray()
     │                              │
     │                              ▼
     │                     AnalyzeYolo()
-    │                     (Stain→DarkClusters 重分类)
+    │                     (Stain 保持原类别)
     │                              │
     │                              ▼
     │                     YoloDerived

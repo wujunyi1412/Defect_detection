@@ -12,7 +12,7 @@
 | 1 | `BrightStripes` |
 | 2 | `LineArtifacts` |
 
-但 C API 的分类数组包含 **5 个最终结果类别**：
+但 C API 的分类数组包含 **4 个最终结果类别**：
 
 | C API 索引 | 最终名称 | 来源 |
 |---:|---|---|
@@ -20,7 +20,6 @@
 | 1 | `Stain` | YOLO class 0 |
 | 2 | `BrightStripes` | YOLO class 1 |
 | 3 | `LineArtifacts` | YOLO class 2 |
-| 4 | `DarkClusters` | `Stain` 根据对比度重分类得到，并非 ONNX 的独立类别 |
 
 因此，修改时必须区分：
 
@@ -154,30 +153,21 @@ case 3: detail.name = "Contamination"; break;
 
 `GetYoloContrastPolarity()` 当前规则是：
 
-- `Stain`、`DarkClusters` 使用暗缺陷对比度；
+- `Stain` 使用暗缺陷对比度；
 - `BrightStripes` 使用亮缺陷对比度；
 - 其他类别使用自动极性。
 
 新增类别时，应根据缺陷是亮、暗还是不确定来更新该函数。否则面积框可能正常，但 `contrast` 和后续对比度过滤结果可能不符合预期。
 
-### 5.2 `Stain -> DarkClusters` 派生分类
+### 5.2 `Stain` 类别保持不变
 
-文件：
-
-- [`internal/yolo_postprocess.cpp`](internal/yolo_postprocess.cpp)
-- [`internal/result_builder.cpp`](internal/result_builder.cpp)
-- [`inference_dll.cpp`](inference_dll.cpp)
-- [`config.ini`](config.ini) 的 `post.dark_clusters_threshold`
-
-当前 `Stain` 会根据对比度变成 `DarkClusters`，传统图像细化后还会再次进行该重分类。
-
-如果新模型不再有这个业务规则，应删除或调整这两处重分类逻辑及相关阈值；如果 `DarkClusters` 改成 ONNX 的独立类别，则不能继续把它只当作 `Stain` 的派生结果处理。
+当前已取消基于对比度的派生分类，YOLO class 0 在后处理和传统图像细化后均保持为 `Stain`。
 
 ### 5.3 暗缺陷传统几何细化
 
 文件：[`internal/result_builder.cpp`](internal/result_builder.cpp)
 
-当前只有 `Stain` 和 `DarkClusters` 在 `use_traditional_measure=1` 时调用 `RefineDarkDefectGeometryAdaptive()`。新增暗缺陷类别是否使用该算法，需要单独决定，不要仅因名称变化而意外失去或获得该处理。
+当前只有 `Stain` 在 `use_traditional_measure=1` 时调用 `RefineDarkDefectGeometryAdaptive()`。新增暗缺陷类别是否使用该算法，需要单独决定。
 
 ### 5.4 AA 区域过滤
 
@@ -204,7 +194,6 @@ case 3: detail.name = "Contamination"; break;
 
 ```cpp
 CategoryFilterConfig stain_filter;
-CategoryFilterConfig darkclusters_filter;
 CategoryFilterConfig brightstripes_filter;
 CategoryFilterConfig lineartifacts_filter;
 ```
@@ -290,7 +279,7 @@ if (!cf) continue;
 - [`Use_DLL/main.cpp`](../Use_DLL/main.cpp)：类别名称数组、名称到索引映射和 CSV 表头；
 - C# 或其他外部调用程序中任何固定类别列表、报表列、统计映射。
 
-当前 Windows C# 的通用 `InspectionResult` 使用字符串名称，没有固定 5 类数组，但结果分析页面仍包含针对 `Abnormal`、`DarkClusters` 和 `Stain` 的业务映射，改名或删除这些类别时也要检查。
+当前 Windows C# 的通用 `InspectionResult` 使用字符串名称，没有固定类别数组，但改名或删除类别时仍要检查结果分析和报表逻辑。
 
 修改 `INSPECTION_DETECT_CATEGORIES` 会改变 `_npy` 调用方需要分配的数组尺寸，DLL 和调用方必须同时重新编译/发布，不能混用新旧头文件。
 
@@ -331,7 +320,7 @@ if (!cf) continue;
 - [ ] ONNX 检测张量特征维与 `4 + 类别数 + mask通道数` 一致
 - [ ] `yolo_postprocess.cpp` 的 `class_id` 映射已同步
 - [ ] 新类别的对比度极性已确认
-- [ ] `Stain/DarkClusters` 特殊重分类是否保留已确认
+- [ ] `Stain` 是否需要保持现有暗缺陷对比度和传统细化逻辑已确认
 - [ ] `result_builder.cpp` 能为所有新类别找到过滤配置
 - [ ] `config.h / config.cpp / config.ini` 已同步
 - [ ] AA 类别允许列表和配置已同步

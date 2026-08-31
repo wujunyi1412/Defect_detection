@@ -179,8 +179,10 @@ int TestYoloPostprocessReusesBinaryMask() {
     detection.mask(cv::Rect(20, 20, 20, 20)).setTo(255);
 
     const InspectionDLL::Internal::YoloDerived result =
-        InspectionDLL::Internal::AnalyzeYolo({detection}, gray, 0.8f);
+        InspectionDLL::Internal::AnalyzeYolo({detection}, gray);
     if (AssertTrue(result.details.size() == 1, "YOLO postprocess should keep the detection")) return 1;
+    if (AssertTrue(result.details[0].name == "Stain",
+                   "YOLO class 0 should remain Stain after postprocess")) return 1;
     if (AssertTrue(result.details[0].area == 400, "YOLO mask area should remain unchanged")) return 1;
     if (AssertTrue(result.details[0].mask.data == detection.mask.data,
                    "YOLO postprocess should share the existing binary mask")) return 1;
@@ -272,7 +274,6 @@ int TestAaYoloFilterRules() {
 
     std::vector<InspectionDLL::DetectionResult> details = {
         MakeDetail("Stain", 0.0f, 645.0f, 121.0f, 40.0f),
-        MakeDetail("DarkClusters", 0.0f, 705.0f, 80.0f, 20.0f),
         MakeDetail("Stain", 0.0f, 680.0f, 60.0f, 20.0f),
         MakeDetail("Stain", 0.0f, 700.0f, 121.0f, 40.0f),
         MakeDetail("BrightStripes", 0.0f, 680.0f, 80.0f, 20.0f)
@@ -280,10 +281,10 @@ int TestAaYoloFilterRules() {
 
     InspectionConfig::AaFilterConfig config;
     InspectionDLL::Internal::ApplyAaYoloFilter(details, config);
-    if (AssertTrue(details.size() == 5, "disabled AA filter should preserve all details")) return 1;
+    if (AssertTrue(details.size() == 4, "disabled AA filter should preserve all details")) return 1;
 
     config.enable = true;
-    config.categories = {"stain", "DARKCLUSTERS"};
+    config.categories = {"stain"};
     InspectionDLL::Internal::ApplyAaYoloFilter(details, config);
     if (AssertTrue(details.size() == 3,
                    "AA filter should remove only matching category, Y range, and ratio details")) return 1;
@@ -296,13 +297,12 @@ int TestAaYoloFilterRules() {
 
     std::vector<InspectionDLL::DetectionResult> position_details = {
         MakeDetail("Stain", 454.22f, 304.30f, 170.52f, 211.39f),
-        MakeDetail("DarkClusters", 430.0f, 280.0f, 145.0f, 175.0f),
         MakeDetail("Stain", 429.0f, 304.30f, 170.52f, 211.39f),
         MakeDetail("BrightStripes", 454.22f, 304.30f, 170.52f, 211.39f)
     };
     config = {};
     config.position_filter_enable = true;
-    config.position_categories = {"stain", "DARKCLUSTERS"};
+    config.position_categories = {"stain"};
     InspectionDLL::Internal::ApplyAaYoloFilter(position_details, config);
     if (AssertTrue(position_details.size() == 2,
                    "AA position filter should remove only details matching every configured range")) return 1;
@@ -339,7 +339,7 @@ int TestAaConfigParsing() {
                << "position_width_max=60.5\n"
                << "position_height_min=70.5\n"
                << "position_height_max=80.5\n"
-               << "position_categories= darkclusters, BrightStripes\n";
+               << "position_categories= stain, BrightStripes\n";
     }
 
     InspectionConfig::InspectionConfigData config;
@@ -374,7 +374,7 @@ int TestAaConfigParsing() {
                    config.aa_filter.position_height_max == 80.5f,
                    "AA position size ranges should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.position_categories.size() == 2 &&
-                   config.aa_filter.position_categories[0] == "darkclusters" &&
+                   config.aa_filter.position_categories[0] == "stain" &&
                    config.aa_filter.position_categories[1] == "BrightStripes",
                    "AA position category list should be trimmed and parsed")) return 1;
     return 0;
@@ -415,14 +415,6 @@ int TestContrastThresholdUsesCategoryDirection() {
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.empty(),
                    "Stain contrast above the threshold should be filtered")) return 1;
-
-    yolo.details[0].name = "DarkClusters";
-    yolo.details[0].contrast = 0.7f;
-    context.darkclusters_filter.contrast_threshold = 0.8f;
-    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
-        patchcore, yolo, gray.size(), gray, gray, output, context);
-    if (AssertTrue(output.details.size() == 1,
-                   "DarkClusters contrast below the threshold should be preserved")) return 1;
 
     yolo.details[0].name = "BrightStripes";
     yolo.details[0].contrast = 0.7f;

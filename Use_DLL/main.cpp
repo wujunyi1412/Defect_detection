@@ -26,12 +26,11 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr std::array<const char*, 5> kCategoryNames = {
+constexpr std::array<const char*, 4> kCategoryNames = {
     "Abnormal",
     "Stain",
     "BrightStripes",
     "LineArtifacts",
-    "DarkClusters",
 };
 
 enum class RunMode {
@@ -130,7 +129,6 @@ int CategoryIndex(const std::string& name) {
     if (name == "Stain") return 1;
     if (name == "BrightStripes") return 2;
     if (name == "LineArtifacts") return 3;
-    if (name == "DarkClusters") return 4;
     return -1;
 }
 
@@ -631,7 +629,7 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<FileResult>& result
     writer
         << "RepeatIndex,FileName,FilePath,InputType,Status,ReturnCode,Result,"
            "AbnormalCount,StainCount,BrightStripesCount,LineArtifactsCount,"
-           "DarkClustersCount,TotalDetectCount,InferenceTimeMs,SaveTimeMs,"
+           "TotalDetectCount,InferenceTimeMs,SaveTimeMs,"
            "TotalTimeMs,Message,OutputImagePath\n";
 
     for (const auto& item : results) {
@@ -649,7 +647,6 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<FileResult>& result
                << counts[1] << ','
                << counts[2] << ','
                << counts[3] << ','
-               << counts[4] << ','
                << total_count << ','
                << std::fixed << std::setprecision(3)
                << item.inference_ms << ',';
