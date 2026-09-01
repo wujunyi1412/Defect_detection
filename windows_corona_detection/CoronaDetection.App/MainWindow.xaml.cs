@@ -66,8 +66,8 @@ public partial class MainWindow : Window
         if (!_loaded) return;
         bool batch = BatchModeRadio.IsChecked == true;
         bool manifest = ManifestModeRadio.IsChecked == true;
-        BrowseInputButton.Content = batch ? "选择文件夹…" : manifest ? "选择 CSV…" : "选择图片…";
-        InputPathLabel.Text = manifest ? "清单 CSV" : "输入位置";
+        BrowseInputButton.Content = batch ? "选择文件夹…" : manifest ? "选择 Excel…" : "选择图片…";
+        InputPathLabel.Text = manifest ? "清单 Excel" : "输入位置";
         RecursiveCheck.IsEnabled = batch;
         PreserveTreeCheck.IsEnabled = batch || manifest;
         ManifestImageRootLabel.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
@@ -90,8 +90,8 @@ public partial class MainWindow : Window
         {
             var dialog = new OpenFileDialog
             {
-                Title = "选择包含 start_time 和 serial_number 的清单 CSV",
-                Filter = "CSV 文件|*.csv|所有文件|*.*"
+                Title = "选择包含 start_time 和 serial_number 的 Excel 工作簿",
+                Filter = "Excel 工作簿|*.xlsx;*.xlsm|Excel 2007+|*.xlsx|启用宏的工作簿|*.xlsm"
             };
             if (dialog.ShowDialog(this) == true)
                 InputPathText.Text = dialog.FileName;

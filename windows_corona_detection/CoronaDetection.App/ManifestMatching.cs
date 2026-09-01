@@ -4,17 +4,18 @@ using System.IO.Compression;
 using System.Security;
 using System.Text;
 using System.Xml;
+using System.Xml.Linq;
 
 namespace CoronaDetection;
 
 internal sealed record ManifestMatchOptions(
-    string CsvPath,
+    string WorkbookPath,
     string ImageRoot,
     int FolderLevel,
     string ImageFormat);
 
 internal sealed record ManifestMatchRow(
-    int CsvRow,
+    int ExcelRow,
     string StartTimeText,
     DateTime? StartTime,
     string SerialNumber,
@@ -48,8 +49,12 @@ internal static class ManifestMatchingService
 
     public static ManifestMatchResult Match(ManifestMatchOptions options)
     {
-        if (!File.Exists(options.CsvPath))
-            throw new FileNotFoundException("清单 CSV 不存在。", options.CsvPath);
+        if (!File.Exists(options.WorkbookPath))
+            throw new FileNotFoundException("清单 Excel 工作簿不存在。", options.WorkbookPath);
+        string workbookExtension = Path.GetExtension(options.WorkbookPath);
+        if (!workbookExtension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) &&
+            !workbookExtension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("清单仅支持 .xlsx 或 .xlsm 格式，不支持旧版 .xls 文件。");
         if (!Directory.Exists(options.ImageRoot))
             throw new DirectoryNotFoundException($"图片根目录不存在：{options.ImageRoot}");
         if (options.FolderLevel < 1)
@@ -60,30 +65,27 @@ internal static class ManifestMatchingService
             : DetectionFiles.FormatExtensions["所有图片"];
         var allowedExtensions = extensions.ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<string> candidateDirectories = EnumerateDirectoriesAtLevel(options.ImageRoot, options.FolderLevel);
-        List<string[]> csvRows = ReadCsv(options.CsvPath);
-        if (csvRows.Count == 0)
-            throw new InvalidOperationException("清单 CSV 为空。");
-
-        int startTimeColumn = FindColumn(csvRows[0], "start_time");
-        int serialNumberColumn = FindColumn(csvRows[0], "serial_number");
-        if (startTimeColumn < 0 || serialNumberColumn < 0)
-            throw new InvalidOperationException("清单 CSV 必须包含 start_time 和 serial_number 两列。");
+        ExcelManifestTable table = ReadExcelWorkbook(options.WorkbookPath);
+        ExcelManifestRow header = table.Rows[0];
+        int startTimeColumn = FindColumn(header.Cells, "start_time");
+        int serialNumberColumn = FindColumn(header.Cells, "serial_number");
 
         var matches = new List<ManifestMatchRow>();
         var uniqueImages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (int index = 1; index < csvRows.Count; index++)
+        for (int index = 1; index < table.Rows.Count; index++)
         {
-            string[] csvRow = csvRows[index];
-            if (csvRow.All(string.IsNullOrWhiteSpace))
+            ExcelManifestRow excelRow = table.Rows[index];
+            if (excelRow.Cells.All(string.IsNullOrWhiteSpace))
                 continue;
 
-            int csvRowNumber = index + 1;
-            string startTimeText = Cell(csvRow, startTimeColumn).Trim();
-            string serialNumber = Cell(csvRow, serialNumberColumn).Trim();
-            if (serialNumber.Length == 0 || !TryParseStartTime(startTimeText, out DateTime startTime))
+            int excelRowNumber = excelRow.RowNumber;
+            string startTimeText = Cell(excelRow.Cells, startTimeColumn).Trim();
+            string serialNumber = Cell(excelRow.Cells, serialNumberColumn).Trim();
+            if (serialNumber.Length == 0 ||
+                !TryParseStartTime(startTimeText, table.Uses1904DateSystem, out DateTime startTime))
             {
                 matches.Add(new ManifestMatchRow(
-                    csvRowNumber, startTimeText, null, serialNumber, string.Empty,
+                    excelRowNumber, startTimeText, null, serialNumber, string.Empty,
                     InvalidStatus, string.Empty, 0, string.Empty,
                     serialNumber.Length == 0 ? "serial_number 为空。" : "start_time 无法解析。"));
                 continue;
@@ -98,7 +100,7 @@ internal static class ManifestMatchingService
             if (folders.Count == 0)
             {
                 matches.Add(new ManifestMatchRow(
-                    csvRowNumber, startTimeText, startTime, serialNumber, expectedKey,
+                    excelRowNumber, startTimeText, startTime, serialNumber, expectedKey,
                     UnmatchedStatus, string.Empty, 0, string.Empty,
                     $"第 {options.FolderLevel} 级目录中未找到包含匹配键的文件夹。"));
                 continue;
@@ -106,7 +108,7 @@ internal static class ManifestMatchingService
             if (folders.Count > 1)
             {
                 matches.Add(new ManifestMatchRow(
-                    csvRowNumber, startTimeText, startTime, serialNumber, expectedKey,
+                    excelRowNumber, startTimeText, startTime, serialNumber, expectedKey,
                     AmbiguousStatus, string.Join(" | ", folders), 0, string.Empty,
                     $"找到 {folders.Count} 个候选文件夹，已跳过检测。"));
                 continue;
@@ -122,7 +124,7 @@ internal static class ManifestMatchingService
                 uniqueImages.Add(image);
 
             matches.Add(new ManifestMatchRow(
-                csvRowNumber, startTimeText, startTime, serialNumber, expectedKey,
+                excelRowNumber, startTimeText, startTime, serialNumber, expectedKey,
                 images.Count == 0 ? EmptyImageStatus : MatchedStatus,
                 matchedFolder, images.Count, string.Join(Environment.NewLine, images),
                 images.Count == 0 ? $"文件夹内没有 {options.ImageFormat} 格式图片。" : string.Empty));
@@ -165,8 +167,21 @@ internal static class ManifestMatchingService
 
     private static string Cell(string[] row, int index) => index < row.Length ? row[index] : string.Empty;
 
-    private static bool TryParseStartTime(string text, out DateTime value)
+    private static bool TryParseStartTime(string text, bool uses1904DateSystem, out DateTime value)
     {
+        if (double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double serialDate) &&
+            serialDate >= 0 && serialDate < 2957004)
+        {
+            try
+            {
+                value = DateTime.FromOADate(serialDate + (uses1904DateSystem ? 1462 : 0));
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                // Fall through to textual date parsing.
+            }
+        }
         string[] exactFormats =
         [
             "yyyy/M/d H:mm:ss", "yyyy/M/d HH:mm:ss", "yyyy-MM-dd H:mm:ss", "yyyy-MM-dd HH:mm:ss",
@@ -178,67 +193,145 @@ internal static class ManifestMatchingService
                    DateTimeStyles.AllowWhiteSpaces, out value);
     }
 
-    private static List<string[]> ReadCsv(string path)
+    private sealed record ExcelManifestRow(int RowNumber, string[] Cells);
+    private sealed record ExcelManifestTable(
+        string SheetName, bool Uses1904DateSystem, List<ExcelManifestRow> Rows);
+
+    private static ExcelManifestTable ReadExcelWorkbook(string path)
     {
-        string text;
-        try
+        using FileStream stream = File.OpenRead(path);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        XDocument workbook = LoadXml(archive, "xl/workbook.xml");
+        XNamespace spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        bool uses1904DateSystem = ParseBoolean(
+            workbook.Root?.Element(spreadsheet + "workbookPr")?.Attribute("date1904")?.Value);
+        Dictionary<string, string> relationshipTargets = ReadWorkbookRelationships(archive);
+        List<string> sharedStrings = ReadSharedStrings(archive);
+
+        foreach (XElement sheet in workbook.Descendants(spreadsheet + "sheet"))
         {
-            text = File.ReadAllText(path, new UTF8Encoding(false, true));
-        }
-        catch (DecoderFallbackException)
-        {
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            text = File.ReadAllText(path, Encoding.GetEncoding(936));
+            string relationshipId = sheet.Attribute(relationships + "id")?.Value ?? string.Empty;
+            if (!relationshipTargets.TryGetValue(relationshipId, out string? target))
+                continue;
+            List<ExcelManifestRow> rows = ReadWorksheet(archive, target, sharedStrings);
+            int headerIndex = rows.FindIndex(row =>
+                FindColumn(row.Cells, "start_time") >= 0 && FindColumn(row.Cells, "serial_number") >= 0);
+            if (headerIndex < 0)
+                continue;
+            return new ExcelManifestTable(
+                sheet.Attribute("name")?.Value ?? "Sheet",
+                uses1904DateSystem,
+                rows.Skip(headerIndex).ToList());
         }
 
-        var rows = new List<string[]>();
-        var row = new List<string>();
-        var field = new StringBuilder();
-        bool quoted = false;
-        for (int i = 0; i < text.Length; i++)
+        throw new InvalidOperationException(
+            "Excel 工作簿中没有找到同时包含 start_time 和 serial_number 表头的工作表。");
+    }
+
+    private static Dictionary<string, string> ReadWorkbookRelationships(ZipArchive archive)
+    {
+        XDocument document = LoadXml(archive, "xl/_rels/workbook.xml.rels");
+        XNamespace packageRelationships = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return document.Descendants(packageRelationships + "Relationship")
+            .Where(item => (item.Attribute("Type")?.Value ?? string.Empty).EndsWith("/worksheet", StringComparison.Ordinal))
+            .ToDictionary(
+                item => item.Attribute("Id")?.Value ?? string.Empty,
+                item => NormalizeWorksheetTarget(item.Attribute("Target")?.Value ?? string.Empty));
+    }
+
+    private static string NormalizeWorksheetTarget(string target)
+    {
+        string normalized = target.Replace('\\', '/').TrimStart('/');
+        if (normalized.StartsWith("xl/", StringComparison.OrdinalIgnoreCase))
+            return normalized;
+        while (normalized.StartsWith("../", StringComparison.Ordinal))
+            normalized = normalized[3..];
+        return "xl/" + normalized;
+    }
+
+    private static List<string> ReadSharedStrings(ZipArchive archive)
+    {
+        ZipArchiveEntry? entry = archive.GetEntry("xl/sharedStrings.xml");
+        if (entry is null)
+            return [];
+        using Stream entryStream = entry.Open();
+        XDocument document = XDocument.Load(entryStream);
+        XNamespace spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return document.Descendants(spreadsheet + "si")
+            .Select(item => string.Concat(item.Descendants(spreadsheet + "t").Select(text => text.Value)))
+            .ToList();
+    }
+
+    private static List<ExcelManifestRow> ReadWorksheet(
+        ZipArchive archive, string entryName, IReadOnlyList<string> sharedStrings)
+    {
+        XDocument document = LoadXml(archive, entryName);
+        XNamespace spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var result = new List<ExcelManifestRow>();
+        foreach (XElement row in document.Descendants(spreadsheet + "row"))
         {
-            char ch = text[i];
-            if (quoted)
+            int rowNumber = int.TryParse(row.Attribute("r")?.Value, out int parsedRow)
+                ? parsedRow
+                : result.Count + 1;
+            var values = new SortedDictionary<int, string>();
+            foreach (XElement cell in row.Elements(spreadsheet + "c"))
             {
-                if (ch == '"' && i + 1 < text.Length && text[i + 1] == '"')
-                {
-                    field.Append('"');
-                    i++;
-                }
-                else if (ch == '"')
-                {
-                    quoted = false;
-                }
-                else
-                {
-                    field.Append(ch);
-                }
+                int column = ColumnIndex(cell.Attribute("r")?.Value);
+                if (column >= 0)
+                    values[column] = ReadCellValue(cell, spreadsheet, sharedStrings);
+            }
+            if (values.Count == 0)
+            {
+                result.Add(new ExcelManifestRow(rowNumber, []));
                 continue;
             }
-
-            if (ch == '"') quoted = true;
-            else if (ch == ',')
-            {
-                row.Add(field.ToString());
-                field.Clear();
-            }
-            else if (ch == '\r' || ch == '\n')
-            {
-                if (ch == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++;
-                row.Add(field.ToString());
-                field.Clear();
-                rows.Add(row.ToArray());
-                row.Clear();
-            }
-            else field.Append(ch);
+            string[] cells = new string[values.Keys.Max() + 1];
+            foreach ((int column, string value) in values)
+                cells[column] = value;
+            result.Add(new ExcelManifestRow(rowNumber, cells));
         }
-        if (field.Length > 0 || row.Count > 0)
-        {
-            row.Add(field.ToString());
-            rows.Add(row.ToArray());
-        }
-        return rows;
+        return result;
     }
+
+    private static string ReadCellValue(
+        XElement cell, XNamespace spreadsheet, IReadOnlyList<string> sharedStrings)
+    {
+        string type = cell.Attribute("t")?.Value ?? string.Empty;
+        if (type == "inlineStr")
+            return string.Concat(cell.Descendants(spreadsheet + "t").Select(text => text.Value));
+        string value = cell.Element(spreadsheet + "v")?.Value ?? string.Empty;
+        if (type == "s" && int.TryParse(value, out int sharedIndex) &&
+            sharedIndex >= 0 && sharedIndex < sharedStrings.Count)
+            return sharedStrings[sharedIndex];
+        return value;
+    }
+
+    private static int ColumnIndex(string? reference)
+    {
+        if (string.IsNullOrEmpty(reference))
+            return -1;
+        int value = 0;
+        int letters = 0;
+        foreach (char ch in reference)
+        {
+            if (!char.IsLetter(ch)) break;
+            value = value * 26 + (char.ToUpperInvariant(ch) - 'A' + 1);
+            letters++;
+        }
+        return letters == 0 ? -1 : value - 1;
+    }
+
+    private static XDocument LoadXml(ZipArchive archive, string entryName)
+    {
+        ZipArchiveEntry entry = archive.GetEntry(entryName) ??
+            throw new InvalidOperationException($"Excel 工作簿缺少必要内容：{entryName}");
+        using Stream stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static bool ParseBoolean(string? value) =>
+        value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 }
 
 internal static class ManifestAuditWorkbookWriter
@@ -274,7 +367,7 @@ internal static class ManifestAuditWorkbookWriter
         var rows = new List<string>
         {
             Row(1, TextCell("A1", "清单图片匹配审计", 1)),
-            Row(3, TextCell("A3", "清单文件", 2), TextCell("B3", Path.GetFullPath(options.CsvPath))),
+            Row(3, TextCell("A3", "清单工作簿", 2), TextCell("B3", Path.GetFullPath(options.WorkbookPath))),
             Row(4, TextCell("A4", "图片根目录", 2), TextCell("B4", Path.GetFullPath(options.ImageRoot))),
             Row(5, TextCell("A5", "匹配文件夹层级", 2), NumberCell("B5", options.FolderLevel)),
             Row(6, TextCell("A6", "图片格式", 2), TextCell("B6", options.ImageFormat)),
@@ -293,7 +386,7 @@ internal static class ManifestAuditWorkbookWriter
 
     private static string DetailSheet(ManifestMatchResult result)
     {
-        string[] headers = ["CSV行号", "start_time", "serial_number", "匹配键", "状态", "匹配文件夹", "图片数", "图片路径", "说明"];
+        string[] headers = ["Excel行号", "start_time", "serial_number", "匹配键", "状态", "匹配文件夹", "图片数", "图片路径", "说明"];
         var rows = new List<string>
         {
             Row(1, headers.Select((header, i) => TextCell($"{Column(i + 1)}1", header, 2)).ToArray())
@@ -303,7 +396,7 @@ internal static class ManifestAuditWorkbookWriter
             ManifestMatchRow item = result.Rows[index];
             int rowNumber = index + 2;
             rows.Add(Row(rowNumber,
-                NumberCell($"A{rowNumber}", item.CsvRow),
+                NumberCell($"A{rowNumber}", item.ExcelRow),
                 item.StartTime is DateTime date
                     ? NumberCell($"B{rowNumber}", date.ToOADate(), 3)
                     : TextCell($"B{rowNumber}", item.StartTimeText),
