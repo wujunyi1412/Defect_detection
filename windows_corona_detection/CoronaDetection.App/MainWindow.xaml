@@ -62,6 +62,7 @@
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition Height="Auto" MinHeight="40"/>
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Text="检测模式" VerticalAlignment="Center"/>
@@ -101,14 +102,24 @@
                                            Foreground="#687384" VerticalAlignment="Center"/>
                             </StackPanel>
 
-                            <TextBlock Grid.Row="4" Text="结果目录" VerticalAlignment="Center"/>
-                            <TextBox x:Name="OutputPathText" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
+                            <CheckBox x:Name="SaveManifestOriginalCheck" Grid.Row="4"
+                                      Content="保存原图" VerticalAlignment="Center"
+                                      Checked="SaveManifestOriginal_Checked" Unchecked="SaveManifestOriginal_Checked"
+                                      Visibility="Collapsed"/>
+                            <TextBox x:Name="ManifestOriginalOutputText" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
+                                     Margin="0,3,6,3" IsEnabled="False" Visibility="Collapsed"/>
+                            <Button x:Name="BrowseManifestOriginalOutputButton" Grid.Row="4" Grid.Column="4"
+                                    Content="选择文件夹…" Click="BrowseManifestOriginalOutput_Click"
+                                    IsEnabled="False" Visibility="Collapsed"/>
+
+                            <TextBlock Grid.Row="5" Text="结果目录" VerticalAlignment="Center"/>
+                            <TextBox x:Name="OutputPathText" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3"
                                      Margin="0,3,6,3"/>
-                            <Button Grid.Row="4" Grid.Column="4" Content="选择文件夹…"
+                            <Button Grid.Row="5" Grid.Column="4" Content="选择文件夹…"
                                     Click="BrowseOutput_Click"/>
 
-                            <TextBlock Grid.Row="5" Text="检测选项" VerticalAlignment="Center"/>
-                            <StackPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="4"
+                            <TextBlock Grid.Row="6" Text="检测选项" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4"
                                         Orientation="Horizontal" VerticalAlignment="Center">
                                 <CheckBox x:Name="RecursiveCheck" Content="递归检测所有子文件夹"
                                           IsEnabled="False" Margin="0,0,28,0"/>
@@ -117,8 +128,8 @@
                                 <CheckBox x:Name="SaveImagesCheck" Content="保存标注结果图" IsChecked="True"/>
                             </StackPanel>
 
-                            <TextBlock Grid.Row="6" Text="执行" VerticalAlignment="Center"/>
-                            <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4" Orientation="Horizontal">
+                            <TextBlock Grid.Row="7" Text="执行" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="4" Orientation="Horizontal">
                                 <Button x:Name="StartButton" Content="开始检测" Click="Start_Click"
                                         Background="{StaticResource PrimaryBrush}" Foreground="White"
                                         BorderThickness="0" Width="110"/>

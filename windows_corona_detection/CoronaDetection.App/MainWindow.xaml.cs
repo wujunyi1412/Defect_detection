@@ -75,6 +75,10 @@ public partial class MainWindow : Window
         BrowseManifestImageRootButton.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
         ManifestOptionsLabel.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
         ManifestOptionsPanel.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        SaveManifestOriginalCheck.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        ManifestOriginalOutputText.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        BrowseManifestOriginalOutputButton.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        UpdateManifestOriginalControls();
         if (manifest)
             FormatCombo.SelectedItem = "TIFF";
         InputPathText.Clear();
@@ -115,6 +119,30 @@ public partial class MainWindow : Window
         var dialog = new OpenFolderDialog { Title = "选择多级图片根目录" };
         if (dialog.ShowDialog(this) == true)
             ManifestImageRootText.Text = dialog.FolderName;
+    }
+
+    private void SaveManifestOriginal_Checked(object sender, RoutedEventArgs e) =>
+        UpdateManifestOriginalControls();
+
+    private void UpdateManifestOriginalControls()
+    {
+        bool enabled = ManifestModeRadio.IsChecked == true &&
+                       SaveManifestOriginalCheck.IsChecked == true && !_busy;
+        ManifestOriginalOutputText.IsEnabled = enabled;
+        BrowseManifestOriginalOutputButton.IsEnabled = enabled;
+    }
+
+    private void BrowseManifestOriginalOutput_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "选择匹配原图保存文件夹",
+            InitialDirectory = Directory.Exists(ManifestOriginalOutputText.Text)
+                ? ManifestOriginalOutputText.Text
+                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        };
+        if (dialog.ShowDialog(this) == true)
+            ManifestOriginalOutputText.Text = dialog.FolderName;
     }
 
     private void BrowseOutput_Click(object sender, RoutedEventArgs e)
@@ -237,12 +265,20 @@ public partial class MainWindow : Window
         string outputRoot = OutputPathText.Text.Trim();
         bool manifestMode = ManifestModeRadio.IsChecked == true;
         bool batchMode = BatchModeRadio.IsChecked == true;
+        bool saveManifestOriginal = manifestMode && SaveManifestOriginalCheck.IsChecked == true;
+        string manifestOriginalRoot = ManifestOriginalOutputText.Text.Trim();
         string auditMessage = string.Empty;
         try
         {
             if (string.IsNullOrWhiteSpace(outputRoot))
                 throw new InvalidOperationException("请选择检测结果保存文件夹。");
             Directory.CreateDirectory(outputRoot);
+            if (saveManifestOriginal)
+            {
+                if (string.IsNullOrWhiteSpace(manifestOriginalRoot))
+                    throw new InvalidOperationException("请选择匹配原图保存文件夹。");
+                Directory.CreateDirectory(manifestOriginalRoot);
+            }
             if (manifestMode)
             {
                 if (!int.TryParse(ManifestFolderLevelText.Text.Trim(), out int folderLevel) || folderLevel < 1)
@@ -328,9 +364,28 @@ public partial class MainWindow : Window
                 {
                     string outputImage = string.Empty;
                     string saveError = string.Empty;
+                    double originalSaveMs = 0.0;
                     DetectionResult result;
                     double inferenceMs;
                     double saveMs;
+                    if (saveManifestOriginal)
+                    {
+                        (saveError, originalSaveMs) = await Task.Run(() =>
+                        {
+                            var originalSaveTimer = Stopwatch.StartNew();
+                            string copyError = string.Empty;
+                            try
+                            {
+                                DetectionFiles.CopyManifestOriginal(manifestOriginalRoot, inputRoot, file);
+                            }
+                            catch (Exception ex)
+                            {
+                                copyError = "原图复制失败：" + ex.Message;
+                            }
+                            originalSaveTimer.Stop();
+                            return (copyError, originalSaveTimer.Elapsed.TotalMilliseconds);
+                        }, _cancellation.Token);
+                    }
                     if (SaveImagesCheck.IsChecked == true)
                     {
                         outputImage = DetectionFiles.BuildOutputImagePath(
@@ -340,10 +395,14 @@ public partial class MainWindow : Window
                             () => ProcessWithNativeOverlay(file, outputImage),
                             _cancellation.Token);
                         result = nativeOverlay.Result;
-                        saveError = nativeOverlay.ExportError;
+                        string overlayError = nativeOverlay.ExportError;
+                        if (!string.IsNullOrEmpty(overlayError))
+                            saveError = string.IsNullOrEmpty(saveError)
+                                ? overlayError
+                                : saveError + "；标注图保存失败：" + overlayError;
                         inferenceMs = nativeOverlay.InferenceMs;
-                        saveMs = nativeOverlay.SaveMs;
-                        if (!string.IsNullOrEmpty(saveError))
+                        saveMs = originalSaveMs + nativeOverlay.SaveMs;
+                        if (!string.IsNullOrEmpty(overlayError))
                             outputImage = string.Empty;
                     }
                     else
@@ -352,7 +411,7 @@ public partial class MainWindow : Window
                             () => ProcessWithAsciiPath(file), _cancellation.Token);
                         result = timedResult.Result;
                         inferenceMs = timedResult.InferenceMs;
-                        saveMs = 0.0;
+                        saveMs = originalSaveMs;
                     }
                     stopwatch.Stop();
                     row = new ResultRow
@@ -505,6 +564,7 @@ public partial class MainWindow : Window
         RestartModelButton.IsEnabled = !busy;
         BrowseInputButton.IsEnabled = !busy;
         BrowseManifestImageRootButton.IsEnabled = !busy;
+        UpdateManifestOriginalControls();
         StartConversionButton.IsEnabled = !busy && !_resultConversionBusy;
         StartCompletionButton.IsEnabled = !busy && !_annotationCompletionBusy;
         StartAnalysisButton.IsEnabled = !busy && !_analysisBusy;

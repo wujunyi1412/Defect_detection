@@ -60,6 +60,26 @@ internal static class DetectionFiles
         return candidate;
     }
 
+    public static string CopyManifestOriginal(
+        string originalOutputRoot, string imageRoot, string inputFile)
+    {
+        string relativePath = Path.GetRelativePath(
+            Path.GetFullPath(imageRoot), Path.GetFullPath(inputFile));
+        string[] parts = relativePath.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || parts[0] == ".." || Path.IsPathRooted(relativePath))
+            throw new InvalidOperationException("匹配原图不在所选图片根目录的子文件夹中。");
+
+        string destinationPath = Path.Combine(originalOutputRoot, relativePath);
+        if (Path.GetFullPath(inputFile).Equals(
+                Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
+            return destinationPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        File.Copy(inputFile, destinationPath, true);
+        return destinationPath;
+    }
+
     public static string CopyConfigSnapshot(string configPath, string outputRoot)
     {
         string sourcePath = Path.GetFullPath(configPath);
