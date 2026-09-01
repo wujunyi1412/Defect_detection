@@ -78,6 +78,14 @@ public partial class MainWindow : Window
         SaveManifestOriginalCheck.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
         ManifestOriginalOutputText.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
         BrowseManifestOriginalOutputButton.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        GridLength manifestRowHeight = manifest ? GridLength.Auto : new GridLength(0);
+        double manifestRowMinimum = manifest ? 40 : 0;
+        ManifestImageRootRow.Height = manifestRowHeight;
+        ManifestImageRootRow.MinHeight = manifestRowMinimum;
+        ManifestOptionsRow.Height = manifestRowHeight;
+        ManifestOptionsRow.MinHeight = manifestRowMinimum;
+        ManifestOriginalOutputRow.Height = manifestRowHeight;
+        ManifestOriginalOutputRow.MinHeight = manifestRowMinimum;
         UpdateManifestOriginalControls();
         if (manifest)
             FormatCombo.SelectedItem = "TIFF";

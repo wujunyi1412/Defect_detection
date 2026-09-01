@@ -381,7 +381,7 @@ internal static class ManifestAuditWorkbookWriter
             Row(15, TextCell("A15", "扫描图片数（含清单重复）"), NumberCell("B15", result.ScannedImageCount)),
             Row(16, TextCell("A16", "实际待检测图片数（已去重）"), NumberCell("B16", result.ImageFiles.Count))
         };
-        return WorksheetXml("<cols><col min=\"1\" max=\"1\" width=\"28\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"80\" customWidth=\"1\"/></cols>", rows, "A8:B16", "A9", merge: "A1:B1");
+        return WorksheetXml("<cols><col min=\"1\" max=\"1\" width=\"28\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"80\" customWidth=\"1\"/></cols>", rows, "A8:B16", 8, "A9", merge: "A1:B1");
     }
 
     private static string DetailSheet(ManifestMatchResult result)
@@ -413,7 +413,7 @@ internal static class ManifestAuditWorkbookWriter
             "<col min=\"6\" max=\"6\" width=\"55\" customWidth=\"1\"/><col min=\"7\" max=\"7\" width=\"10\" customWidth=\"1\"/>" +
             "<col min=\"8\" max=\"9\" width=\"55\" customWidth=\"1\"/></cols>";
         string filter = result.Rows.Count == 0 ? string.Empty : $"A1:I{result.Rows.Count + 1}";
-        return WorksheetXml(columns, rows, filter, "A2");
+        return WorksheetXml(columns, rows, filter, 1, "A2");
     }
 
     private static int StatusStyle(string status) => status switch
@@ -424,12 +424,14 @@ internal static class ManifestAuditWorkbookWriter
         _ => 0
     };
 
-    private static string WorksheetXml(string columns, IEnumerable<string> rows, string autoFilter, string topLeftCell, string? merge = null) =>
+    private static string WorksheetXml(
+        string columns, IEnumerable<string> rows, string autoFilter,
+        int frozenRows, string topLeftCell, string? merge = null) =>
         $"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
-        $"<sheetViews><sheetView showGridLines=\"0\" workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"{topLeftCell}\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews>" +
+        $"<sheetViews><sheetView showGridLines=\"0\" workbookViewId=\"0\"><pane ySplit=\"{frozenRows}\" topLeftCell=\"{topLeftCell}\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews>" +
         $"<sheetFormatPr defaultRowHeight=\"18\"/>{columns}<sheetData>{string.Concat(rows)}</sheetData>" +
-        (merge is null ? string.Empty : $"<mergeCells count=\"1\"><mergeCell ref=\"{merge}\"/></mergeCells>") +
-        (autoFilter.Length == 0 ? string.Empty : $"<autoFilter ref=\"{autoFilter}\"/>") + "</worksheet>";
+        (autoFilter.Length == 0 ? string.Empty : $"<autoFilter ref=\"{autoFilter}\"/>") +
+        (merge is null ? string.Empty : $"<mergeCells count=\"1\"><mergeCell ref=\"{merge}\"/></mergeCells>") + "</worksheet>";
 
     private static string Row(int number, params string[] cells) => $"<row r=\"{number}\">{string.Concat(cells)}</row>";
     private static string TextCell(string reference, string value, int style = 0) =>

@@ -57,9 +57,9 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
-                                <RowDefinition Height="Auto" MinHeight="40"/>
-                                <RowDefinition Height="Auto" MinHeight="40"/>
-                                <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition x:Name="ManifestImageRootRow" Height="0" MinHeight="0"/>
+                                <RowDefinition x:Name="ManifestOptionsRow" Height="0" MinHeight="0"/>
+                                <RowDefinition x:Name="ManifestOriginalOutputRow" Height="0" MinHeight="0"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
