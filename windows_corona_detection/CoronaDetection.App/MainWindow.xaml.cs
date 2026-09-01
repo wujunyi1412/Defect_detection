@@ -65,15 +65,34 @@ public partial class MainWindow : Window
     {
         if (!_loaded) return;
         bool batch = BatchModeRadio.IsChecked == true;
-        BrowseInputButton.Content = batch ? "选择文件夹…" : "选择图片…";
+        bool manifest = ManifestModeRadio.IsChecked == true;
+        BrowseInputButton.Content = batch ? "选择文件夹…" : manifest ? "选择 CSV…" : "选择图片…";
+        InputPathLabel.Text = manifest ? "清单 CSV" : "输入位置";
         RecursiveCheck.IsEnabled = batch;
-        PreserveTreeCheck.IsEnabled = batch;
+        PreserveTreeCheck.IsEnabled = batch || manifest;
+        ManifestImageRootLabel.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        ManifestImageRootText.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        BrowseManifestImageRootButton.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        ManifestOptionsLabel.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        ManifestOptionsPanel.Visibility = manifest ? Visibility.Visible : Visibility.Collapsed;
+        if (manifest)
+            FormatCombo.SelectedItem = "TIFF";
         InputPathText.Clear();
     }
 
     private void BrowseInput_Click(object sender, RoutedEventArgs e)
     {
-        if (BatchModeRadio.IsChecked == true)
+        if (ManifestModeRadio.IsChecked == true)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "选择包含 start_time 和 serial_number 的清单 CSV",
+                Filter = "CSV 文件|*.csv|所有文件|*.*"
+            };
+            if (dialog.ShowDialog(this) == true)
+                InputPathText.Text = dialog.FileName;
+        }
+        else if (BatchModeRadio.IsChecked == true)
         {
             var dialog = new OpenFolderDialog { Title = "选择待检测图片文件夹" };
             if (dialog.ShowDialog(this) == true)
@@ -89,6 +108,13 @@ public partial class MainWindow : Window
             if (dialog.ShowDialog(this) == true)
                 InputPathText.Text = dialog.FileName;
         }
+    }
+
+    private void BrowseManifestImageRoot_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog { Title = "选择多级图片根目录" };
+        if (dialog.ShowDialog(this) == true)
+            ManifestImageRootText.Text = dialog.FolderName;
     }
 
     private void BrowseOutput_Click(object sender, RoutedEventArgs e)
@@ -209,16 +235,54 @@ public partial class MainWindow : Window
         List<string> files;
         string inputRoot = InputPathText.Text.Trim();
         string outputRoot = OutputPathText.Text.Trim();
+        bool manifestMode = ManifestModeRadio.IsChecked == true;
+        bool batchMode = BatchModeRadio.IsChecked == true;
+        string auditMessage = string.Empty;
         try
         {
             if (string.IsNullOrWhiteSpace(outputRoot))
                 throw new InvalidOperationException("请选择检测结果保存文件夹。");
-            files = DetectionFiles.Enumerate(
-                inputRoot, BatchModeRadio.IsChecked == true,
-                RecursiveCheck.IsChecked == true, FormatCombo.Text);
-            if (files.Count == 0)
-                throw new InvalidOperationException("没有找到符合格式筛选条件的图片。");
             Directory.CreateDirectory(outputRoot);
+            if (manifestMode)
+            {
+                if (!int.TryParse(ManifestFolderLevelText.Text.Trim(), out int folderLevel) || folderLevel < 1)
+                    throw new InvalidOperationException("目标文件夹层级必须是大于或等于 1 的整数。");
+                var options = new ManifestMatchOptions(
+                    inputRoot,
+                    ManifestImageRootText.Text.Trim(),
+                    folderLevel,
+                    FormatCombo.Text);
+                SetBusy(true, $"正在读取清单并扫描第 {folderLevel} 级文件夹…", true);
+                ManifestMatchResult matchResult;
+                string auditPath;
+                try
+                {
+                    (matchResult, auditPath) = await Task.Run(() =>
+                    {
+                        ManifestMatchResult result = ManifestMatchingService.Match(options);
+                        string workbook = ManifestAuditWorkbookWriter.Save(outputRoot, options, result);
+                        return (result, workbook);
+                    });
+                }
+                finally
+                {
+                    SetBusy(false, TaskStatusText.Text, true);
+                }
+                files = matchResult.ImageFiles.ToList();
+                inputRoot = Path.GetFullPath(options.ImageRoot);
+                auditMessage = $"清单 {matchResult.RecordCount} 条，匹配 {matchResult.MatchedCount} 条，" +
+                    $"待检测图片 {files.Count} 张；匹配审计：{Path.GetFileName(auditPath)}";
+            }
+            else
+            {
+                files = DetectionFiles.Enumerate(
+                    inputRoot, batchMode,
+                    RecursiveCheck.IsChecked == true, FormatCombo.Text);
+            }
+            if (files.Count == 0)
+                throw new InvalidOperationException(manifestMode
+                    ? "清单匹配后没有可检测图片；匹配情况已写入 manifest_match_audit.xlsx。"
+                    : "没有找到符合格式筛选条件的图片。");
         }
         catch (Exception ex)
         {
@@ -249,7 +313,7 @@ public partial class MainWindow : Window
         TaskProgress.Maximum = files.Count;
         TaskProgress.Value = 0;
         _cancellation = new CancellationTokenSource();
-        SetBusy(true, $"准备检测，共 {files.Count} 张");
+        SetBusy(true, string.IsNullOrEmpty(auditMessage) ? $"准备检测，共 {files.Count} 张" : auditMessage);
 
         try
         {
@@ -270,7 +334,7 @@ public partial class MainWindow : Window
                     if (SaveImagesCheck.IsChecked == true)
                     {
                         outputImage = DetectionFiles.BuildOutputImagePath(
-                            outputRoot, inputRoot, file, BatchModeRadio.IsChecked == true,
+                            outputRoot, inputRoot, file, batchMode || manifestMode,
                             PreserveTreeCheck.IsChecked == true);
                         NativeOverlayResult nativeOverlay = await Task.Run(
                             () => ProcessWithNativeOverlay(file, outputImage),
@@ -333,7 +397,8 @@ public partial class MainWindow : Window
                     ResultGrid.SelectedIndex = 0;
             }
             TaskStatusText.Text =
-                $"检测完成：成功 {Results.Count(r => r.Status != "失败")}，失败 {Results.Count(r => r.Status == "失败")}";
+                $"检测完成：成功 {Results.Count(r => r.Status != "失败")}，失败 {Results.Count(r => r.Status == "失败")}" +
+                (manifestMode ? "；清单匹配审计已保存" : string.Empty);
         }
         catch (OperationCanceledException)
         {
@@ -439,6 +504,7 @@ public partial class MainWindow : Window
         SaveConfigButton.IsEnabled = !busy;
         RestartModelButton.IsEnabled = !busy;
         BrowseInputButton.IsEnabled = !busy;
+        BrowseManifestImageRootButton.IsEnabled = !busy;
         StartConversionButton.IsEnabled = !busy && !_resultConversionBusy;
         StartCompletionButton.IsEnabled = !busy && !_annotationCompletionBusy;
         StartAnalysisButton.IsEnabled = !busy && !_analysisBusy;

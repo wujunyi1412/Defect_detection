@@ -60,6 +60,8 @@
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
                                 <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition Height="Auto" MinHeight="40"/>
+                                <RowDefinition Height="Auto" MinHeight="40"/>
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Text="检测模式" VerticalAlignment="Center"/>
@@ -67,25 +69,46 @@
                                 <RadioButton x:Name="SingleModeRadio" Content="单张检测" IsChecked="True"
                                              Margin="0,0,24,0" Checked="ModeRadio_Checked"/>
                                 <RadioButton x:Name="BatchModeRadio" Content="批量检测"
+                                             Margin="0,0,24,0" Checked="ModeRadio_Checked"/>
+                                <RadioButton x:Name="ManifestModeRadio" Content="清单匹配"
                                              Checked="ModeRadio_Checked"/>
                             </StackPanel>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="图片格式" VerticalAlignment="Center"/>
                             <ComboBox x:Name="FormatCombo" Grid.Row="0" Grid.Column="3"/>
 
-                            <TextBlock Grid.Row="1" Text="输入位置" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="InputPathLabel" Grid.Row="1" Text="输入位置" VerticalAlignment="Center"/>
                             <TextBox x:Name="InputPathText" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
                                      Margin="0,3,6,3"/>
                             <Button x:Name="BrowseInputButton" Grid.Row="1" Grid.Column="4"
                                     Content="选择图片…" Click="BrowseInput_Click"/>
 
-                            <TextBlock Grid.Row="2" Text="结果目录" VerticalAlignment="Center"/>
-                            <TextBox x:Name="OutputPathText" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3"
+                            <TextBlock x:Name="ManifestImageRootLabel" Grid.Row="2" Text="图片根目录"
+                                       VerticalAlignment="Center" Visibility="Collapsed"/>
+                            <TextBox x:Name="ManifestImageRootText" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3"
+                                     Margin="0,3,6,3" Visibility="Collapsed"/>
+                            <Button x:Name="BrowseManifestImageRootButton" Grid.Row="2" Grid.Column="4"
+                                    Content="选择文件夹…" Click="BrowseManifestImageRoot_Click"
+                                    Visibility="Collapsed"/>
+
+                            <TextBlock x:Name="ManifestOptionsLabel" Grid.Row="3" Text="匹配设置"
+                                       VerticalAlignment="Center" Visibility="Collapsed"/>
+                            <StackPanel x:Name="ManifestOptionsPanel" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="4"
+                                        Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                                <TextBlock Text="目标文件夹层级" VerticalAlignment="Center"/>
+                                <TextBox x:Name="ManifestFolderLevelText" Text="2" Width="55" Margin="8,0,18,0"
+                                         VerticalContentAlignment="Center"/>
+                                <TextBlock Text="根目录的直接子文件夹为第 1 级；匹配目录内部不递归"
+                                           Foreground="#687384" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="4" Text="结果目录" VerticalAlignment="Center"/>
+                            <TextBox x:Name="OutputPathText" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
                                      Margin="0,3,6,3"/>
-                            <Button Grid.Row="2" Grid.Column="4" Content="选择文件夹…"
+                            <Button Grid.Row="4" Grid.Column="4" Content="选择文件夹…"
                                     Click="BrowseOutput_Click"/>
 
-                            <TextBlock Grid.Row="3" Text="批量选项" VerticalAlignment="Center"/>
-                            <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="4"
+                            <TextBlock Grid.Row="5" Text="检测选项" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="4"
                                         Orientation="Horizontal" VerticalAlignment="Center">
                                 <CheckBox x:Name="RecursiveCheck" Content="递归检测所有子文件夹"
                                           IsEnabled="False" Margin="0,0,28,0"/>
@@ -94,8 +117,8 @@
                                 <CheckBox x:Name="SaveImagesCheck" Content="保存标注结果图" IsChecked="True"/>
                             </StackPanel>
 
-                            <TextBlock Grid.Row="4" Text="执行" VerticalAlignment="Center"/>
-                            <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="4" Orientation="Horizontal">
+                            <TextBlock Grid.Row="6" Text="执行" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4" Orientation="Horizontal">
                                 <Button x:Name="StartButton" Content="开始检测" Click="Start_Click"
                                         Background="{StaticResource PrimaryBrush}" Foreground="White"
                                         BorderThickness="0" Width="110"/>
