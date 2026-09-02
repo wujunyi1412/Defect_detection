@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace InspectionConfig {
@@ -25,6 +26,21 @@ struct AbnormalFilterConfig {
     int min_height = 0;
     int min_area = 0;
 };
+
+using CategoryFilterMap = std::unordered_map<std::string, CategoryFilterConfig>;
+
+inline CategoryFilterMap DefaultCategoryFilters() {
+    return {
+        {"Glue_overflow", {}},
+        {"Decolorization", {}},
+        {"Stain", {}},
+        {"Stripes", {}},
+        {"BrightStripes", {}},
+        {"Bright_clusters", {}},
+        {"Line_artifacts", {}},
+        {"LineArtifacts", {}},
+    };
+}
 
 struct AaFilterConfig {
     bool enable = false;
@@ -76,9 +92,7 @@ struct InspectionConfigData {
     std::string log_file_path;
     AaFilterConfig aa_filter;
     AbnormalFilterConfig abnormal_filter;
-    CategoryFilterConfig stain_filter;
-    CategoryFilterConfig brightstripes_filter;
-    CategoryFilterConfig lineartifacts_filter;
+    CategoryFilterMap category_filters = DefaultCategoryFilters();
 };
 
 bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& out, std::string& err);

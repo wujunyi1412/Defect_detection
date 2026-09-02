@@ -12,6 +12,7 @@
 #include "internal/overlay_renderer.h"
 #include "internal/result_builder.h"
 #include "internal/yolo_postprocess.h"
+#include "internal/yolo_categories.h"
 #include "logger.h"
 
 namespace {
@@ -169,7 +170,7 @@ int TestYoloPostprocessReusesBinaryMask() {
     gray(cv::Rect(20, 20, 20, 20)).setTo(50);
 
     YOLO::Detection detection{};
-    detection.class_id = 0;
+    detection.class_id = 2;
     detection.confidence = 0.9f;
     detection.x1 = 20.0f;
     detection.y1 = 20.0f;
@@ -182,12 +183,42 @@ int TestYoloPostprocessReusesBinaryMask() {
         InspectionDLL::Internal::AnalyzeYolo({detection}, gray);
     if (AssertTrue(result.details.size() == 1, "YOLO postprocess should keep the detection")) return 1;
     if (AssertTrue(result.details[0].name == "Stain",
-                   "YOLO class 0 should remain Stain after postprocess")) return 1;
+                   "YOLO class 2 should map to Stain after postprocess")) return 1;
     if (AssertTrue(result.details[0].area == 400, "YOLO mask area should remain unchanged")) return 1;
     if (AssertTrue(result.details[0].mask.data == detection.mask.data,
                    "YOLO postprocess should share the existing binary mask")) return 1;
     if (AssertTrue(cv::norm(result.details[0].mask, detection.mask, cv::NORM_INF) == 0.0,
                    "shared YOLO mask contents should remain unchanged")) return 1;
+    return 0;
+}
+
+int TestAllYoloClassMappingsAndPolarities() {
+    constexpr const char* expected_names[] = {
+        "Glue_overflow", "Decolorization", "Stain", "Stripes",
+        "BrightStripes", "Bright_clusters", "Line_artifacts", "LineArtifacts"
+    };
+    constexpr InspectionDLL::Internal::ContrastPolarity expected_polarities[] = {
+        InspectionDLL::Internal::ContrastPolarity::Dark,
+        InspectionDLL::Internal::ContrastPolarity::Dark,
+        InspectionDLL::Internal::ContrastPolarity::Dark,
+        InspectionDLL::Internal::ContrastPolarity::Auto,
+        InspectionDLL::Internal::ContrastPolarity::Bright,
+        InspectionDLL::Internal::ContrastPolarity::Bright,
+        InspectionDLL::Internal::ContrastPolarity::Dark,
+        InspectionDLL::Internal::ContrastPolarity::Bright,
+    };
+
+    for (int class_id = 0; class_id < 8; ++class_id) {
+        const auto* category = InspectionDLL::Internal::FindYoloCategory(class_id);
+        if (AssertTrue(category != nullptr, "every YOLO class id should have a definition")) return 1;
+        if (AssertTrue(category->name == std::string(expected_names[class_id]),
+                       "YOLO class id should map to the expected name")) return 1;
+        if (AssertTrue(category->contrast_polarity == expected_polarities[class_id],
+                       "YOLO class should use the configured contrast polarity")) return 1;
+        if (AssertTrue(category->keep_contrast_below_threshold ==
+                           (expected_polarities[class_id] == InspectionDLL::Internal::ContrastPolarity::Dark),
+                       "only dark YOLO classes should keep contrast below the threshold")) return 1;
+    }
     return 0;
 }
 
@@ -339,7 +370,9 @@ int TestAaConfigParsing() {
                << "position_width_max=60.5\n"
                << "position_height_min=70.5\n"
                << "position_height_max=80.5\n"
-               << "position_categories= stain, BrightStripes\n";
+               << "position_categories= stain, BrightStripes\n"
+               << "[Stain_config]\n"
+               << "use_traditional_measure=1\n";
     }
 
     InspectionConfig::InspectionConfigData config;
@@ -377,6 +410,12 @@ int TestAaConfigParsing() {
                    config.aa_filter.position_categories[0] == "stain" &&
                    config.aa_filter.position_categories[1] == "BrightStripes",
                    "AA position category list should be trimmed and parsed")) return 1;
+    if (AssertTrue(config.category_filters.size() == 8,
+                   "all eight YOLO category filters should be available")) return 1;
+    if (AssertTrue(config.category_filters.at("Stain").use_traditional_measure,
+                   "Stain traditional measurement should be configuration-driven")) return 1;
+    if (AssertTrue(!config.category_filters.at("Glue_overflow").use_traditional_measure,
+                   "other categories should not enable traditional measurement by default")) return 1;
     return 0;
 }
 
@@ -395,7 +434,7 @@ int TestContrastThresholdUsesCategoryDirection() {
 
     InspectionDLL::Internal::PatchCoreDerived patchcore;
     InspectionDLL::Internal::ResultComposeContext context;
-    context.stain_filter.contrast_threshold = 0.8f;
+    context.category_filters["Stain"].contrast_threshold = 0.8f;
 
     InspectionDLL::InferenceResult output;
     const cv::Mat gray(32, 32, CV_8U, cv::Scalar(128));
@@ -418,7 +457,7 @@ int TestContrastThresholdUsesCategoryDirection() {
 
     yolo.details[0].name = "BrightStripes";
     yolo.details[0].contrast = 0.7f;
-    context.brightstripes_filter.contrast_threshold = 0.8f;
+    context.category_filters["BrightStripes"].contrast_threshold = 0.8f;
     InspectionDLL::Internal::ComposeOutputWithDefectFilter(
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.empty(),
@@ -432,13 +471,13 @@ int TestContrastThresholdUsesCategoryDirection() {
 
     yolo.details[0].name = "LineArtifacts";
     yolo.details[0].contrast = 0.9f;
-    context.lineartifacts_filter.contrast_threshold = 0.8f;
+    context.category_filters["LineArtifacts"].contrast_threshold = 0.8f;
     InspectionDLL::Internal::ComposeOutputWithDefectFilter(
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.size() == 1,
                    "LineArtifacts contrast above the threshold should be preserved")) return 1;
 
-    context.lineartifacts_filter.contrast_threshold = 0.0f;
+    context.category_filters["LineArtifacts"].contrast_threshold = 0.0f;
     yolo.details[0].contrast = 0.1f;
     InspectionDLL::Internal::ComposeOutputWithDefectFilter(
         patchcore, yolo, gray.size(), gray, gray, output, context);
@@ -477,10 +516,11 @@ int main() {
     if (TestAaConfigParsing()) return 1;
     if (TestContrastThresholdUsesCategoryDirection()) return 1;
     if (TestPatchCoreAnyYoloIouFiltering()) return 1;
+    if (TestAllYoloClassMappingsAndPolarities()) return 1;
+    if (TestYoloPostprocessReusesBinaryMask()) return 1;
     if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;
-    if (TestYoloPostprocessReusesBinaryMask()) return 1;
     std::cout << "[PASS] smoke_tests" << std::endl;
     return 0;
 }

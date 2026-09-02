@@ -137,6 +137,7 @@ set(DLL_HEADERS
     Corona_defect_detection/internal/patchcore_yolo_iou_filter.h
     Corona_defect_detection/internal/patchcore_postprocess.h
     Corona_defect_detection/internal/yolo_postprocess.h
+    Corona_defect_detection/internal/yolo_categories.h
     Corona_defect_detection/internal/result_builder.h
     Corona_defect_detection/yolo_inference.h
     Corona_defect_detection/patchcore_inference.h

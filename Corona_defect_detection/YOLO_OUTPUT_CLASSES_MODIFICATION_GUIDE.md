@@ -1,5 +1,7 @@
 # YOLO 输出类别修改指南
 
+> 当前实现已经切换为 8 类；本文后续展示的 3 类代码片段是修改前的历史示例，不再代表当前源码。当前顺序为 `Glue_overflow`、`Decolorization`、`Stain`、`Stripes`、`BrightStripes`、`Bright_clusters`、`Line_artifacts`、`LineArtifacts`。
+
 本文依据当前仓库代码整理，适用于 `Corona_defect_detection` 中的 YOLOv8-Seg 推理流程。
 
 ## 1. 先明确当前类别体系

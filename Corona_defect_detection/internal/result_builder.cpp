@@ -7,13 +7,10 @@
 #include "dark_defect_refiner.h"
 #include "image_utils.h"
 #include "patchcore_yolo_iou_filter.h"
+#include "yolo_categories.h"
 
 namespace InspectionDLL::Internal {
 namespace {
-
-bool IsDarkDefectCategory(const std::string& name) {
-    return name == "Stain";
-}
 
 bool PassContrastThreshold(float contrast, float threshold, bool keep_below_threshold) {
     if (threshold <= 0.0f) return true;
@@ -119,15 +116,13 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
     std::vector<DetectionResult> yolo_details_filtered;
     yolo_details_filtered.reserve(yolo.details.size());
     for (const auto& d : yolo.details) {
-        const InspectionConfig::CategoryFilterConfig* cf = nullptr;
-        if (d.name == "Stain") cf = &context.stain_filter;
-        else if (d.name == "BrightStripes") cf = &context.brightstripes_filter;
-        else if (d.name == "LineArtifacts") cf = &context.lineartifacts_filter;
-
-        if (!cf) continue;
+        const auto filter_it = context.category_filters.find(d.name);
+        const YoloCategoryDefinition* category = FindYoloCategory(d.name);
+        if (filter_it == context.category_filters.end() || !category) continue;
+        const InspectionConfig::CategoryFilterConfig* cf = &filter_it->second;
 
         DetectionResult detail = d;
-        if (detail.name == "Stain" && cf->use_traditional_measure) {
+        if (cf->use_traditional_measure) {
             RefineDarkDefectGeometryAdaptive(gray_yolo, detail);
         }
         if (!cf->enable) continue;
@@ -135,7 +130,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         if (!PassContrastThreshold(
                 detail.contrast,
                 cf->contrast_threshold,
-                IsDarkDefectCategory(detail.name))) continue;
+                category->keep_contrast_below_threshold)) continue;
         if (cf->min_width > 0 && detail.w < static_cast<float>(cf->min_width)) continue;
         if (cf->min_height > 0 && detail.h < static_cast<float>(cf->min_height)) continue;
         if (cf->min_area > 0 && detail.area < cf->min_area) continue;

@@ -3,6 +3,7 @@
 #include "ini_parser.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <filesystem>
 #include <sstream>
@@ -12,6 +13,17 @@ namespace InspectionConfig {
 namespace {
 
 namespace fs = std::filesystem;
+
+constexpr std::array<std::pair<const char*, const char*>, 8> kYoloCategorySections = {{
+    {"Glue_overflow", "glue_overflow_config"},
+    {"Decolorization", "decolorization_config"},
+    {"Stain", "stain_config"},
+    {"Stripes", "stripes_config"},
+    {"BrightStripes", "brightstripes_config"},
+    {"Bright_clusters", "bright_clusters_config"},
+    {"Line_artifacts", "line_artifacts_config"},
+    {"LineArtifacts", "lineartifacts_config"},
+}};
 
 std::string TrimCopy(const std::string& value) {
     const auto begin = std::find_if_not(value.begin(), value.end(),
@@ -30,9 +42,9 @@ std::string ToLowerCopy(std::string value) {
 
 std::string CanonicalAaCategory(const std::string& category) {
     const std::string lowered = ToLowerCopy(TrimCopy(category));
-    if (lowered == "stain") return "Stain";
-    if (lowered == "brightstripes") return "BrightStripes";
-    if (lowered == "lineartifacts") return "LineArtifacts";
+    for (const auto& entry : kYoloCategorySections) {
+        if (lowered == ToLowerCopy(entry.first)) return entry.first;
+    }
     return {};
 }
 
@@ -305,9 +317,10 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     }
 
     out.abnormal_filter = LoadAbnormalFilter(ini);
-    out.stain_filter = LoadCategoryFilter(ini, "stain_config");
-    out.brightstripes_filter = LoadCategoryFilter(ini, "brightstripes_config");
-    out.lineartifacts_filter = LoadCategoryFilter(ini, "lineartifacts_config");
+    out.category_filters.clear();
+    for (const auto& entry : kYoloCategorySections) {
+        out.category_filters.emplace(entry.first, LoadCategoryFilter(ini, entry.second));
+    }
     out.aa_filter = LoadAaFilter(ini);
 
     if (!ValidateConfig(out, err)) {

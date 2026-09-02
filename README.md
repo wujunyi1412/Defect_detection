@@ -6,7 +6,7 @@
 
 采用 **双模型协同** 策略：
 
-- **YOLOv8-seg** — 检测已知缺陷类型（Stain 污点、BrightStripes 亮条纹、LineArtifacts 线状伪影），输出分割 mask 和边界框
+- **YOLOv8-seg** — 检测 8 种已知缺陷（Glue_overflow、Decolorization、Stain、Stripes、BrightStripes、Bright_clusters、Line_artifacts、LineArtifacts），输出分割 mask 和边界框
 - **PatchCore + Faiss** — 基于正常样本特征分布的异常检测，捕获未知异常模式
 
 两者结果通过可配置的类别过滤器融合，输出结构化的检测结果。对外提供 C API，可通过 P/Invoke 由 C# 上位机调用。
@@ -182,6 +182,11 @@ struct InferenceResult {
 | 类别 | 检测模型 | 说明 |
 |------|----------|------|
 | Abnormal | PatchCore | 异常区域（泛化检测） |
+| Glue_overflow | YOLOv8 | 胶溢出 |
+| Decolorization | YOLOv8 | 脱色 |
 | Stain | YOLOv8 | 污点 |
+| Stripes | YOLOv8 | 条纹 |
 | BrightStripes | YOLOv8 | 亮条纹 |
+| Bright_clusters | YOLOv8 | 亮斑簇 |
+| Line_artifacts | YOLOv8 | 线状伪影（下划线类别） |
 | LineArtifacts | YOLOv8 | 线状伪影 |

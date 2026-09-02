@@ -2,5 +2,8 @@ cmake -S . -B ./build -G "Visual Studio 17 2022" -A x64
 cmake --build ./build --config Release
 
 
+Glue_overflow,Decolorization,Stain,Stripes,BrightStripes,Bright_clusters,Line_artifacts,LineArtifacts
+
+
 
 

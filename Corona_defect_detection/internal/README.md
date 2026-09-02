@@ -40,10 +40,10 @@ inference_dll.cpp (主控)
 **输出**：`YoloDerived`（含 score、是否检测到缺陷、DetectionResult 列表）
 
 核心逻辑 `AnalyzeYolo()`：
-1. 遍历 YOLO 检测框，按 class_id 映射缺陷名：0→Stain, 1→BrightStripes, 2→LineArtifacts
+1. 遍历 YOLO 检测框，按 class_id 映射 8 类：Glue_overflow、Decolorization、Stain、Stripes、BrightStripes、Bright_clusters、Line_artifacts、LineArtifacts
 2. 从分割 mask 计算缺陷面积
 3. 调用 `CalculateContrastRatio` 计算对比度
-4. `Stain` 在对比度计算和传统图像细化后保持原类别
+4. 0/1/2/6 类使用暗缺陷极性，4/5/7 类使用亮缺陷极性，3 类使用自动极性
 
 ### 3. patchcore_postprocess — PatchCore 后处理
 
@@ -89,8 +89,8 @@ inference_dll.cpp (主控)
 - 两者都有 → 合并输出
 
 #### `ComposeOutputWithDefectFilter`（完整模式，带类别过滤）
-1. **YOLO 过滤**：按 `CategoryFilterConfig`（enable / confidence / contrast / min_size）逐类别过滤，Stain 额外调用传统图像算法精修
-2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤。`contrast_threshold > 0` 时，Stain 仅保留 `contrast < threshold`，BrightStripes/LineArtifacts/PatchCore Abnormal 保留 `contrast >= threshold`；配置为 `0` 时关闭对比度过滤
+1. **YOLO 过滤**：通过“类别名 → `CategoryFilterConfig`”映射逐类别过滤；`use_traditional_measure=1` 的类别调用传统图像算法精修，当前仅 Stain 开启
+2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤。`contrast_threshold > 0` 时，暗类（0/1/2/6）保留 `contrast < threshold`，其余 YOLO 类和 PatchCore Abnormal 保留 `contrast >= threshold`；配置为 `0` 时关闭对比度过滤
 3. **AA 后过滤**：标准 YOLO 过滤后，`aa_yolo_filter` 包含两条独立规则：“中心 Y + 最小宽高比”和“左上角 X/Y + 宽/高范围”。两条规则分别由 `[AA]` 开关控制，任一启用规则命中就移除该 YOLO 结果
 4. **PatchCore/YOLO IoU 过滤**：对每条已通过过滤的 PatchCore `Abnormal`，计算它与全部最终 YOLO 框的 IoU；任一 IoU 严格大于 `post.patchcore_yolo_iou_threshold` 时移除该 PatchCore 明细。没有 YOLO 时始终保留，阈值设为 `1` 可关闭此过滤
 5. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`

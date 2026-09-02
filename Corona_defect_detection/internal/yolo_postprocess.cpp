@@ -5,22 +5,9 @@
 #include <string>
 
 #include "image_utils.h"
+#include "yolo_categories.h"
 
 namespace InspectionDLL::Internal {
-
-namespace {
-
-ContrastPolarity GetYoloContrastPolarity(const std::string& defect_name) {
-    if (defect_name == "Stain") {
-        return ContrastPolarity::Dark;
-    }
-    if (defect_name == "BrightStripes") {
-        return ContrastPolarity::Bright;
-    }
-    return ContrastPolarity::Auto;
-}
-
-}  // namespace
 
 YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
                         const cv::Mat& gray_yolo) {
@@ -32,12 +19,9 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
     result.details.reserve(yolo_detections.size());
     for (const auto& det : yolo_detections) {
         DetectionResult detail;
-        switch (det.class_id) {
-            case 0: detail.name = "Stain"; break;
-            case 1: detail.name = "BrightStripes"; break;
-            case 2: detail.name = "LineArtifacts"; break;
-            default: continue;
-        }
+        const YoloCategoryDefinition* category = FindYoloCategory(det.class_id);
+        if (!category) continue;
+        detail.name = category->name;
         detail.score = det.confidence;
         result.score = std::max(result.score, detail.score);
         result.has_detections = true;
@@ -81,7 +65,7 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
         }
 
         detail.contrast = CalculateContrastRatioAdaptive(gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
-                                                 GetYoloContrastPolarity(detail.name));
+                                                 category->contrast_polarity);
 
         result.details.push_back(detail);
     }

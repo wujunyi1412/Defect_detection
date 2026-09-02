@@ -109,7 +109,7 @@ Corona_defect_detection/
    - 实例分割 mask：`mask_coeff × proto → sigmoid → crop → resize → 阈值化`
 4. **Warm-up**：初始化时跑一次空推理预热
 
-输出 `Detection` 列表：`class_id`（0=Stain, 1=BrightStripes, 2=LineArtifacts）、置信度、边界框、二值 mask。
+输出 `Detection` 列表：`class_id` 按以下顺序映射：0=`Glue_overflow`、1=`Decolorization`、2=`Stain`、3=`Stripes`、4=`BrightStripes`、5=`Bright_clusters`、6=`Line_artifacts`、7=`LineArtifacts`，并包含置信度、边界框和二值 mask。
 
 ### 5. config.ini — 配置文件
 
@@ -121,12 +121,17 @@ Corona_defect_detection/
 [post]            # 后处理与输出图配置（concat_original_image=1 时左原图、右标注图）
 [AA]              # YOLO 最终结果的可配置区域/形状过滤
 [Abormal_config]  # Abnormal 类别过滤器（双阈值：score + area）
+[Glue_overflow_config]
+[Decolorization_config]
 [Stain_config]    # Stain 类别过滤器（含传统精修开关）
+[Stripes_config]
 [Brightstripes_config]
+[Bright_clusters_config]
+[Line_artifacts_config]
 [Lineartifacts_config]
 ```
 
-每个类别过滤器包含：`Enable`、`confidence_threshold`、`contrast_threshold`、`min_width/height/area`。Stain 额外支持 `use_traditional_measure`（启用传统图像精修）。
+每个类别过滤器包含：`Enable`、`confidence_threshold`、`contrast_threshold`、`min_width/height/area` 和 `use_traditional_measure`。当前仅在 Stain 配置中开启传统图像精修，行为由配置控制。
 
 ### 6. internal/ — 后处理模块
 
@@ -167,7 +172,7 @@ Inspection_ProcessFloatArray()
     │                              │
     │                              ▼
     │                     AnalyzeYolo()
-    │                     (Stain 保持原类别)
+    │                     (8 类 class_id 映射与亮暗对比度计算)
     │                              │
     │                              ▼
     │                     YoloDerived

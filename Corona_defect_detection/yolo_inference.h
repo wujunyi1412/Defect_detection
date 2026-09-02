@@ -62,7 +62,7 @@ private:
     float iou_threshold_;
     NmsMode nms_mode_ = NmsMode::Global;
 
-    static constexpr int NUM_CLASSES = 3;
+    static constexpr int NUM_CLASSES = 8;
 };
 
 } // namespace YOLO

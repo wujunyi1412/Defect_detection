@@ -11,9 +11,7 @@ struct ResultComposeContext {
     float patchcore_yolo_iou_threshold = 0.0f;
     InspectionConfig::AaFilterConfig aa_filter;
     InspectionConfig::AbnormalFilterConfig abnormal_filter;
-    InspectionConfig::CategoryFilterConfig stain_filter;
-    InspectionConfig::CategoryFilterConfig brightstripes_filter;
-    InspectionConfig::CategoryFilterConfig lineartifacts_filter;
+    InspectionConfig::CategoryFilterMap category_filters = InspectionConfig::DefaultCategoryFilters();
 };
 
 void ComposeOutput(const PatchCoreDerived& pc,

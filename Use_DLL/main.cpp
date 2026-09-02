@@ -26,10 +26,15 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr std::array<const char*, 4> kCategoryNames = {
+constexpr std::array<const char*, 9> kCategoryNames = {
     "Abnormal",
+    "Glue_overflow",
+    "Decolorization",
     "Stain",
+    "Stripes",
     "BrightStripes",
+    "Bright_clusters",
+    "Line_artifacts",
     "LineArtifacts",
 };
 
@@ -126,9 +131,9 @@ bool MatchesInputType(const fs::path& path, InputType requested) {
 
 int CategoryIndex(const std::string& name) {
     if (name == "Abnormal") return 0;
-    if (name == "Stain") return 1;
-    if (name == "BrightStripes") return 2;
-    if (name == "LineArtifacts") return 3;
+    for (size_t index = 1; index < kCategoryNames.size(); ++index) {
+        if (name == kCategoryNames[index]) return static_cast<int>(index);
+    }
     return -1;
 }
 
@@ -628,7 +633,8 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<FileResult>& result
     writer.write(reinterpret_cast<const char*>(utf8_bom), sizeof(utf8_bom));
     writer
         << "RepeatIndex,FileName,FilePath,InputType,Status,ReturnCode,Result,"
-           "AbnormalCount,StainCount,BrightStripesCount,LineArtifactsCount,"
+           "AbnormalCount,GlueOverflowCount,DecolorizationCount,StainCount,StripesCount,"
+           "BrightStripesCount,BrightClustersCount,LineArtifactsUnderscoreCount,LineArtifactsCount,"
            "TotalDetectCount,InferenceTimeMs,SaveTimeMs,"
            "TotalTimeMs,Message,OutputImagePath\n";
 
@@ -647,6 +653,11 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<FileResult>& result
                << counts[1] << ','
                << counts[2] << ','
                << counts[3] << ','
+               << counts[4] << ','
+               << counts[5] << ','
+               << counts[6] << ','
+               << counts[7] << ','
+               << counts[8] << ','
                << total_count << ','
                << std::fixed << std::setprecision(3)
                << item.inference_ms << ',';
