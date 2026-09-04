@@ -108,6 +108,7 @@ set(DLL_SOURCES
     Corona_defect_detection/internal/image_utils.cpp
     Corona_defect_detection/internal/image_utils_adaptive.cpp
     Corona_defect_detection/internal/aa_yolo_filter.cpp
+    Corona_defect_detection/internal/iqt_yolo_filter.cpp
     Corona_defect_detection/internal/dark_defect_refiner.cpp
     Corona_defect_detection/internal/dark_defect_refiner_adaptive.cpp
     Corona_defect_detection/internal/patchcore_yolo_iou_filter.cpp
@@ -133,6 +134,7 @@ set(DLL_HEADERS
     Corona_defect_detection/internal/overlay_renderer.h
     Corona_defect_detection/internal/image_utils.h
     Corona_defect_detection/internal/aa_yolo_filter.h
+    Corona_defect_detection/internal/iqt_yolo_filter.h
     Corona_defect_detection/internal/dark_defect_refiner.h
     Corona_defect_detection/internal/patchcore_yolo_iou_filter.h
     Corona_defect_detection/internal/patchcore_postprocess.h
@@ -270,6 +272,7 @@ if(BUILD_SMOKE_TESTS)
         Corona_defect_detection/internal/image_utils.cpp
         Corona_defect_detection/internal/image_utils_adaptive.cpp
         Corona_defect_detection/internal/aa_yolo_filter.cpp
+        Corona_defect_detection/internal/iqt_yolo_filter.cpp
         Corona_defect_detection/internal/dark_defect_refiner.cpp
         Corona_defect_detection/internal/dark_defect_refiner_adaptive.cpp
         Corona_defect_detection/internal/patchcore_yolo_iou_filter.cpp

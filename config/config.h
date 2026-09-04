@@ -61,6 +61,14 @@ struct AaFilterConfig {
     std::vector<std::string> position_categories = {"Stain"};
 };
 
+struct IqtFilterConfig {
+    bool enable = false;
+    float center_y_min = 665.0f;
+    float center_y_max = 715.0f;
+    float min_width_height_ratio = 3.0f;
+    std::vector<std::string> categories = {"Stain"};
+};
+
 struct InspectionConfigData {
     bool yolo_enabled = true;
     bool patchcore_enabled = true;
@@ -91,6 +99,7 @@ struct InspectionConfigData {
     bool log_to_file = false;
     std::string log_file_path;
     AaFilterConfig aa_filter;
+    IqtFilterConfig iqt_filter;
     AbnormalFilterConfig abnormal_filter;
     CategoryFilterMap category_filters = DefaultCategoryFilters();
 };

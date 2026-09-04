@@ -12,6 +12,7 @@ inference_dll.cpp (主控)
     ├── image_utils        ← 图像预处理 & 统计工具函数
     ├── yolo_postprocess   ← YOLO 检测结果 → YoloDerived
     ├── aa_yolo_filter    ← YOLO 最终结果的 AA 区域/形状过滤
+    ├── iqt_yolo_filter   ← YOLO 最终结果的 IQT 独立区域/形状过滤
     ├── patchcore_postprocess ← PatchCore 异常图 → PatchCoreDerived
     │
     ├── dark_defect_refiner ← 暗缺陷几何精修 (传统CV)
@@ -93,7 +94,8 @@ inference_dll.cpp (主控)
 2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤。`contrast_threshold > 0` 时，暗类（0/1/2/6）保留 `contrast < threshold`，其余 YOLO 类和 PatchCore Abnormal 保留 `contrast >= threshold`；配置为 `0` 时关闭对比度过滤
 3. **AA 后过滤**：标准 YOLO 过滤后，`aa_yolo_filter` 包含两条独立规则：“中心 Y + 最小宽高比”和“左上角 X/Y + 宽/高范围”。两条规则分别由 `[AA]` 开关控制，任一启用规则命中就移除该 YOLO 结果
 4. **PatchCore/YOLO IoU 过滤**：对每条已通过过滤的 PatchCore `Abnormal`，计算它与全部最终 YOLO 框的 IoU；任一 IoU 严格大于 `post.patchcore_yolo_iou_threshold` 时移除该 PatchCore 明细。没有 YOLO 时始终保留，阈值设为 `1` 可关闭此过滤
-5. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
+5. **IQT 后过滤**：在 PatchCore/YOLO IoU 过滤之后，按独立的 `[IQT]` 配置执行“中心 Y + 最小宽高比”规则；参数不与 `[AA]` 共用
+6. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
 
 ---
 

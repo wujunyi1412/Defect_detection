@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "internal/aa_yolo_filter.h"
+#include "internal/iqt_yolo_filter.h"
 #include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
 #include "internal/result_builder.h"
@@ -85,6 +86,7 @@ int TestConfigDefaults() {
                    "AA filter default center Y range should be [665, 715]")) return 1;
     if (AssertTrue(cfg.aa_filter.min_width_height_ratio == 3.0f,
                    "AA filter default width-height ratio should be 3")) return 1;
+    if (AssertTrue(!cfg.iqt_filter.enable, "IQT filter default should be disabled")) return 1;
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(!cfg.expand_defect_box, "expand_defect_box default should be false")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
@@ -371,6 +373,12 @@ int TestAaConfigParsing() {
                << "position_height_min=70.5\n"
                << "position_height_max=80.5\n"
                << "position_categories= stain, BrightStripes\n"
+               << "[IQT]\n"
+               << "enabled=1\n"
+               << "center_y_min=300.5\n"
+               << "center_y_max=400.5\n"
+               << "min_width_height_ratio=5.5\n"
+               << "categories= BrightStripes, stain\n"
                << "[Stain_config]\n"
                << "use_traditional_measure=1\n";
     }
@@ -410,12 +418,58 @@ int TestAaConfigParsing() {
                    config.aa_filter.position_categories[0] == "stain" &&
                    config.aa_filter.position_categories[1] == "BrightStripes",
                    "AA position category list should be trimmed and parsed")) return 1;
+    if (AssertTrue(config.iqt_filter.enable, "IQT config enabled flag should be parsed")) return 1;
+    if (AssertTrue(config.iqt_filter.center_y_min == 300.5f &&
+                   config.iqt_filter.center_y_max == 400.5f,
+                   "IQT center Y range should be parsed independently from AA")) return 1;
+    if (AssertTrue(config.iqt_filter.min_width_height_ratio == 5.5f,
+                   "IQT ratio should be parsed independently from AA")) return 1;
+    if (AssertTrue(config.iqt_filter.categories.size() == 2 &&
+                   config.iqt_filter.categories[0] == "BrightStripes" &&
+                   config.iqt_filter.categories[1] == "stain",
+                   "IQT category list should be trimmed and parsed")) return 1;
     if (AssertTrue(config.category_filters.size() == 8,
                    "all eight YOLO category filters should be available")) return 1;
     if (AssertTrue(config.category_filters.at("Stain").use_traditional_measure,
                    "Stain traditional measurement should be configuration-driven")) return 1;
     if (AssertTrue(!config.category_filters.at("Glue_overflow").use_traditional_measure,
                    "other categories should not enable traditional measurement by default")) return 1;
+    return 0;
+}
+
+int TestIqtYoloFilterRules() {
+    auto MakeDetail = [](const std::string& name, float y, float width, float height) {
+        InspectionDLL::DetectionResult detail;
+        detail.name = name;
+        detail.y = y;
+        detail.w = width;
+        detail.h = height;
+        return detail;
+    };
+
+    std::vector<InspectionDLL::DetectionResult> details = {
+        MakeDetail("Stain", 285.0f, 81.0f, 20.0f),
+        MakeDetail("Stain", 285.0f, 80.0f, 20.0f),
+        MakeDetail("Stain", 385.0f, 81.0f, 20.0f),
+        MakeDetail("BrightStripes", 285.0f, 81.0f, 20.0f)
+    };
+
+    InspectionConfig::IqtFilterConfig config;
+    config.enable = true;
+    config.center_y_min = 290.0f;
+    config.center_y_max = 310.0f;
+    config.min_width_height_ratio = 4.0f;
+    config.categories = {"stain"};
+    InspectionDLL::Internal::ApplyIqtYoloFilter(details, config);
+
+    if (AssertTrue(details.size() == 3,
+                   "IQT should remove only details matching its own category, Y range, and ratio")) return 1;
+    if (AssertTrue(details[0].w == 80.0f,
+                   "IQT should preserve a ratio equal to its threshold")) return 1;
+    if (AssertTrue(details[1].y == 385.0f,
+                   "IQT should preserve a center Y outside its configured range")) return 1;
+    if (AssertTrue(details[2].name == "BrightStripes",
+                   "IQT should preserve categories outside its list")) return 1;
     return 0;
 }
 
@@ -513,6 +567,7 @@ int main() {
     if (TestFloatOverlayFileIs8Bit()) return 1;
     if (TestConfigDefaults()) return 1;
     if (TestAaYoloFilterRules()) return 1;
+    if (TestIqtYoloFilterRules()) return 1;
     if (TestAaConfigParsing()) return 1;
     if (TestContrastThresholdUsesCategoryDirection()) return 1;
     if (TestPatchCoreAnyYoloIouFiltering()) return 1;

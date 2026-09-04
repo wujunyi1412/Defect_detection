@@ -6,6 +6,7 @@
 #include "aa_yolo_filter.h"
 #include "dark_defect_refiner.h"
 #include "image_utils.h"
+#include "iqt_yolo_filter.h"
 #include "patchcore_yolo_iou_filter.h"
 #include "yolo_categories.h"
 
@@ -29,19 +30,8 @@ void ComposeOutput(const PatchCoreDerived& pc,
     std::vector<DetectionResult> yolo_details_filtered = yolo.details;
     ApplyAaYoloFilter(yolo_details_filtered, context.aa_filter);
 
-    output.yolo_score = 0.0f;
-    for (const auto& detail : yolo_details_filtered) {
-        output.yolo_score = std::max(output.yolo_score, detail.score);
-    }
     output.patchcore_score = pc.score;
     output.patchcore_area_ratio = pc.area_ratio;
-
-    const bool has_yolo_detections = !yolo_details_filtered.empty();
-    if (pc.score >= context.score_threshold || has_yolo_detections) {
-        output.result = "NG";
-    } else {
-        output.result = "OK";
-    }
 
     std::vector<DetectionResult> pc_details;
 
@@ -99,6 +89,14 @@ void ComposeOutput(const PatchCoreDerived& pc,
         pc_details,
         yolo_details_filtered,
         context.patchcore_yolo_iou_threshold);
+    ApplyIqtYoloFilter(yolo_details_filtered, context.iqt_filter);
+
+    output.yolo_score = 0.0f;
+    for (const auto& detail : yolo_details_filtered) {
+        output.yolo_score = std::max(output.yolo_score, detail.score);
+    }
+    const bool has_yolo_detections = !yolo_details_filtered.empty();
+    output.result = (pc.score >= context.score_threshold || has_yolo_detections) ? "NG" : "OK";
 
     output.details.clear();
     output.details.reserve(pc_details.size() + yolo_details_filtered.size());
@@ -137,7 +135,6 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         yolo_details_filtered.push_back(detail);
     }
     ApplyAaYoloFilter(yolo_details_filtered, context.aa_filter);
-    const bool has_yolo_detections = !yolo_details_filtered.empty();
 
     std::vector<DetectionResult> pc_details_filtered;
     const bool abnormal_enable = context.abnormal_filter.enable;
@@ -216,6 +213,9 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         pc_details_filtered,
         yolo_details_filtered,
         context.patchcore_yolo_iou_threshold);
+    ApplyIqtYoloFilter(yolo_details_filtered, context.iqt_filter);
+
+    const bool has_yolo_detections = !yolo_details_filtered.empty();
 
     if (has_yolo_detections) {
         float max_score = 0.0f;

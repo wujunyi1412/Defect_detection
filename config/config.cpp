@@ -40,7 +40,7 @@ std::string ToLowerCopy(std::string value) {
     return value;
 }
 
-std::string CanonicalAaCategory(const std::string& category) {
+std::string CanonicalYoloCategory(const std::string& category) {
     const std::string lowered = ToLowerCopy(TrimCopy(category));
     for (const auto& entry : kYoloCategorySections) {
         if (lowered == ToLowerCopy(entry.first)) return entry.first;
@@ -48,7 +48,7 @@ std::string CanonicalAaCategory(const std::string& category) {
     return {};
 }
 
-std::vector<std::string> ParseAaCategories(const std::string& value) {
+std::vector<std::string> ParseFilterCategories(const std::string& value) {
     std::vector<std::string> categories;
     std::stringstream stream(value);
     std::string item;
@@ -69,7 +69,7 @@ AaFilterConfig LoadAaFilter(const IniData& ini) {
 
     std::string categories;
     if (TryGetString(ini, "AA", "categories", categories)) {
-        filter.categories = ParseAaCategories(categories);
+        filter.categories = ParseFilterCategories(categories);
     }
 
     filter.position_filter_enable = GetBoolOr(
@@ -89,7 +89,22 @@ AaFilterConfig LoadAaFilter(const IniData& ini) {
 
     std::string position_categories;
     if (TryGetString(ini, "AA", "position_categories", position_categories)) {
-        filter.position_categories = ParseAaCategories(position_categories);
+        filter.position_categories = ParseFilterCategories(position_categories);
+    }
+    return filter;
+}
+
+IqtFilterConfig LoadIqtFilter(const IniData& ini) {
+    IqtFilterConfig filter;
+    filter.enable = GetBoolOr(ini, "IQT", "enabled", filter.enable);
+    filter.center_y_min = GetFloatOr(ini, "IQT", "center_y_min", filter.center_y_min);
+    filter.center_y_max = GetFloatOr(ini, "IQT", "center_y_max", filter.center_y_max);
+    filter.min_width_height_ratio = GetFloatOr(
+        ini, "IQT", "min_width_height_ratio", filter.min_width_height_ratio);
+
+    std::string categories;
+    if (TryGetString(ini, "IQT", "categories", categories)) {
+        filter.categories = ParseFilterCategories(categories);
     }
     return filter;
 }
@@ -197,7 +212,7 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
             return false;
         }
         for (const auto& category : out.aa_filter.categories) {
-            if (CanonicalAaCategory(category).empty()) {
+            if (CanonicalYoloCategory(category).empty()) {
                 err = "AA.categories contains unsupported category: " + category;
                 return false;
             }
@@ -225,8 +240,29 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
             return false;
         }
         for (const auto& category : out.aa_filter.position_categories) {
-            if (CanonicalAaCategory(category).empty()) {
+            if (CanonicalYoloCategory(category).empty()) {
                 err = "AA.position_categories contains unsupported category: " + category;
+                return false;
+            }
+        }
+    }
+
+    if (out.iqt_filter.enable) {
+        if (out.iqt_filter.center_y_max < out.iqt_filter.center_y_min) {
+            err = "IQT.center_y_max must be >= IQT.center_y_min";
+            return false;
+        }
+        if (out.iqt_filter.min_width_height_ratio < 0.0f) {
+            err = "IQT.min_width_height_ratio must be >= 0";
+            return false;
+        }
+        if (out.iqt_filter.categories.empty()) {
+            err = "IQT.categories must contain at least one category when IQT is enabled";
+            return false;
+        }
+        for (const auto& category : out.iqt_filter.categories) {
+            if (CanonicalYoloCategory(category).empty()) {
+                err = "IQT.categories contains unsupported category: " + category;
                 return false;
             }
         }
@@ -322,6 +358,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
         out.category_filters.emplace(entry.first, LoadCategoryFilter(ini, entry.second));
     }
     out.aa_filter = LoadAaFilter(ini);
+    out.iqt_filter = LoadIqtFilter(ini);
 
     if (!ValidateConfig(out, err)) {
         return false;

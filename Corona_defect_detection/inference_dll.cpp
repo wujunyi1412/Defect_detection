@@ -51,6 +51,7 @@ public:
     AbnormalFilter abnormal_filter_;
     InspectionConfig::CategoryFilterMap category_filters_;
     InspectionConfig::AaFilterConfig aa_filter_;
+    InspectionConfig::IqtFilterConfig iqt_filter_;
 
     bool initialized_ = false;
 
@@ -70,6 +71,7 @@ public:
         context.abnormal_filter = abnormal_filter_;
         context.category_filters = category_filters_;
         context.aa_filter = aa_filter_;
+        context.iqt_filter = iqt_filter_;
         return context;
     }
 };
@@ -124,6 +126,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->abnormal_filter_ = config.abnormal_filter;
     pImpl->category_filters_ = config.category_filters;
     pImpl->aa_filter_ = config.aa_filter;
+    pImpl->iqt_filter_ = config.iqt_filter;
 
     if (pImpl->yolo_enabled_) {
         pImpl->yolo_detector.SetNmsMode(

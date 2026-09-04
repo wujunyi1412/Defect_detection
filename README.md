@@ -40,6 +40,7 @@
 │       ├── dark_defect_refiner*.*  # 暗缺陷精修（传统测量/自适应）
 │       ├── image_utils*.*          # 对比度测量（自适应版）
 │       ├── aa_yolo_filter.*        # AA 区域/形状规则过滤
+│       ├── iqt_yolo_filter.*       # IQT 独立区域/形状规则过滤
 │       ├── patchcore_yolo_iou_filter.* # PatchCore 与 YOLO 框 IoU 去重
 │       ├── result_builder.*        # 结果融合与输出构建
 │       └── overlay_renderer.*      # 可视化渲染 → Halcon 图像句柄
@@ -163,6 +164,13 @@ position_width_min = 145
 position_width_max = 200
 position_height_min = 175
 position_height_max = 245
+
+[IQT]            # 与 AA 同级且参数完全独立；在 PatchCore/YOLO IoU 过滤后执行
+enabled = 0
+center_y_min = 665
+center_y_max = 715
+min_width_height_ratio = 3.0
+categories = Stain
 ```
 
 每个缺陷类别有独立的过滤器小节，共 9 个：`[Abormal_config]`（PatchCore 异常）、`[Glue_overflow_config]`、`[Decolorization_config]`、`[Stain_config]`、`[Stripes_config]`、`[BrightStripes_config]`、`[Bright_clusters_config]`、`[Line_artifacts_config]`、`[LineArtifacts_config]`。
