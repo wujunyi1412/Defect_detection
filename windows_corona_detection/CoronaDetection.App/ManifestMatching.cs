@@ -23,6 +23,7 @@ internal sealed record ManifestMatchRow(
     string ExpectedKey,
     string Status,
     string MatchedFolder,
+    string TimeOffsets,
     int ImageCount,
     string ImagePaths,
     string Message);
@@ -105,30 +106,37 @@ internal static class ManifestMatchingService
             {
                 matches.Add(new ManifestMatchRow(
                     excelRowNumber, createTimeText, null, serialNumber, string.Empty,
-                    InvalidStatus, string.Empty, 0, string.Empty,
+                    InvalidStatus, string.Empty, string.Empty, 0, string.Empty,
                     serialNumber.Length == 0 ? "serial_number 为空。" : "createTime 无法解析。"));
                 continue;
             }
 
             string expectedKey = $"{serialNumber}_{createTime:yyyyMMdd'T'HHmmss}";
-            List<string> folders = candidateDirectories
-                .Where(path => FolderMatches(
-                    path, serialNumber, createTime, options.TimeToleranceSeconds))
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var folders = new List<FolderMatch>();
+            foreach (string path in candidateDirectories)
+            {
+                if (TryMatchFolder(
+                    path, serialNumber, createTime, options.TimeToleranceSeconds,
+                    out long timeOffsetSeconds))
+                {
+                    folders.Add(new FolderMatch(path, timeOffsetSeconds));
+                }
+            }
+            folders.Sort((left, right) =>
+                StringComparer.OrdinalIgnoreCase.Compare(left.Path, right.Path));
 
             if (folders.Count == 0)
             {
                 matches.Add(new ManifestMatchRow(
                     excelRowNumber, createTimeText, createTime, serialNumber, expectedKey,
-                    UnmatchedStatus, string.Empty, 0, string.Empty,
+                    UnmatchedStatus, string.Empty, string.Empty, 0, string.Empty,
                     $"第 {options.FolderLevel} 级目录中未找到时间差在 ±{options.TimeToleranceSeconds} 秒内的匹配文件夹。"));
                 continue;
             }
-            foreach (string folder in folders)
-                matchedDirectories.Add(folder);
+            foreach (FolderMatch folder in folders)
+                matchedDirectories.Add(folder.Path);
             List<string> images = folders
-                .SelectMany(GetImages)
+                .SelectMany(folder => GetImages(folder.Path))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -138,7 +146,9 @@ internal static class ManifestMatchingService
                 images.Count == 0
                     ? EmptyImageStatus
                     : folders.Count > 1 ? MultipleMatchedStatus : MatchedStatus,
-                string.Join(" | ", folders), images.Count, string.Join(Environment.NewLine, images),
+                string.Join(" | ", folders.Select(folder => folder.Path)),
+                string.Join(" | ", folders.Select(folder => FormatTimeOffset(folder.TimeOffsetSeconds))),
+                images.Count, string.Join(Environment.NewLine, images),
                 images.Count == 0
                     ? $"匹配到的文件夹内没有 {options.ImageFormat} 格式图片。"
                     : folders.Count > 1
@@ -189,18 +199,20 @@ internal static class ManifestMatchingService
 
     private static string Cell(string[] row, int index) => index < row.Length ? row[index] : string.Empty;
 
-    private static bool FolderMatches(
-        string path, string serialNumber, DateTime createTime, int toleranceSeconds)
+    private static bool TryMatchFolder(
+        string path, string serialNumber, DateTime createTime, int toleranceSeconds,
+        out long timeOffsetSeconds)
     {
         string folderName = Path.GetFileName(path);
         string prefix = serialNumber + "_";
         DateTime createTimeAtSecond = createTime.AddTicks(-(createTime.Ticks % TimeSpan.TicksPerSecond));
+        long? closestOffset = null;
         int searchStart = 0;
         while (searchStart < folderName.Length)
         {
             int prefixIndex = folderName.IndexOf(prefix, searchStart, StringComparison.OrdinalIgnoreCase);
             if (prefixIndex < 0)
-                return false;
+                break;
 
             int timestampStart = prefixIndex + prefix.Length;
             const int TimestampLength = 15;
@@ -210,16 +222,25 @@ internal static class ManifestMatchingService
                     "yyyyMMdd'T'HHmmss",
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
-                    out DateTime folderTime) &&
-                Math.Abs((folderTime - createTimeAtSecond).TotalSeconds) <= toleranceSeconds)
+                    out DateTime folderTime))
             {
-                return true;
+                long offset = (long)(folderTime - createTimeAtSecond).TotalSeconds;
+                if (Math.Abs(offset) <= toleranceSeconds &&
+                    (closestOffset is null || Math.Abs(offset) < Math.Abs(closestOffset.Value)))
+                {
+                    closestOffset = offset;
+                }
             }
 
             searchStart = prefixIndex + 1;
         }
-        return false;
+        timeOffsetSeconds = closestOffset ?? 0;
+        return closestOffset.HasValue;
     }
+
+    private static string FormatTimeOffset(long seconds) => seconds > 0
+        ? $"+{seconds}"
+        : seconds.ToString(CultureInfo.InvariantCulture);
 
     private static bool TryParseCreateTime(string text, bool uses1904DateSystem, out DateTime value)
     {
@@ -248,6 +269,7 @@ internal static class ManifestMatchingService
     }
 
     private sealed record ExcelManifestRow(int RowNumber, string[] Cells);
+    private sealed record FolderMatch(string Path, long TimeOffsetSeconds);
     private sealed record ExcelManifestTable(
         string SheetName, bool Uses1904DateSystem, List<ExcelManifestRow> Rows);
 
@@ -441,7 +463,7 @@ internal static class ManifestAuditWorkbookWriter
 
     private static string DetailSheet(ManifestMatchResult result)
     {
-        string[] headers = ["Excel行号", "createTime", "serial_number", "匹配键", "状态", "匹配文件夹", "图片数", "图片路径", "说明"];
+        string[] headers = ["Excel行号", "createTime", "serial_number", "匹配键", "状态", "匹配文件夹", "时间误差（秒，文件夹-createTime）", "图片数", "图片路径", "说明"];
         var rows = new List<string>
         {
             Row(1, headers.Select((header, i) => TextCell($"{Column(i + 1)}1", header, 2)).ToArray())
@@ -459,15 +481,16 @@ internal static class ManifestAuditWorkbookWriter
                 TextCell($"D{rowNumber}", item.ExpectedKey),
                 TextCell($"E{rowNumber}", item.Status, StatusStyle(item.Status)),
                 TextCell($"F{rowNumber}", item.MatchedFolder),
-                NumberCell($"G{rowNumber}", item.ImageCount),
-                TextCell($"H{rowNumber}", item.ImagePaths, 7),
-                TextCell($"I{rowNumber}", item.Message)));
+                TextCell($"G{rowNumber}", item.TimeOffsets),
+                NumberCell($"H{rowNumber}", item.ImageCount),
+                TextCell($"I{rowNumber}", item.ImagePaths, 7),
+                TextCell($"J{rowNumber}", item.Message)));
         }
         string columns = "<cols><col min=\"1\" max=\"1\" width=\"10\" customWidth=\"1\"/>" +
             "<col min=\"2\" max=\"2\" width=\"21\" customWidth=\"1\"/><col min=\"3\" max=\"5\" width=\"25\" customWidth=\"1\"/>" +
-            "<col min=\"6\" max=\"6\" width=\"55\" customWidth=\"1\"/><col min=\"7\" max=\"7\" width=\"10\" customWidth=\"1\"/>" +
-            "<col min=\"8\" max=\"9\" width=\"55\" customWidth=\"1\"/></cols>";
-        string filter = result.Rows.Count == 0 ? string.Empty : $"A1:I{result.Rows.Count + 1}";
+            "<col min=\"6\" max=\"6\" width=\"55\" customWidth=\"1\"/><col min=\"7\" max=\"7\" width=\"34\" customWidth=\"1\"/>" +
+            "<col min=\"8\" max=\"8\" width=\"10\" customWidth=\"1\"/><col min=\"9\" max=\"10\" width=\"55\" customWidth=\"1\"/></cols>";
+        string filter = result.Rows.Count == 0 ? string.Empty : $"A1:J{result.Rows.Count + 1}";
         return WorksheetXml(columns, rows, filter, 1, "A2");
     }
 
