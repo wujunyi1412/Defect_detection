@@ -12,12 +12,13 @@ internal sealed record ManifestMatchOptions(
     string WorkbookPath,
     string ImageRoot,
     int FolderLevel,
+    int TimeToleranceSeconds,
     string ImageFormat);
 
 internal sealed record ManifestMatchRow(
     int ExcelRow,
-    string StartTimeText,
-    DateTime? StartTime,
+    string CreateTimeText,
+    DateTime? CreateTime,
     string SerialNumber,
     string ExpectedKey,
     string Status,
@@ -31,9 +32,10 @@ internal sealed class ManifestMatchResult
     public required IReadOnlyList<ManifestMatchRow> Rows { get; init; }
     public required IReadOnlyList<string> ImageFiles { get; init; }
     public int RecordCount => Rows.Count;
-    public int MatchedCount => Rows.Count(row => row.Status == ManifestMatchingService.MatchedStatus);
+    public int MatchedCount => Rows.Count(row =>
+        row.Status is ManifestMatchingService.MatchedStatus or ManifestMatchingService.MultipleMatchedStatus);
     public int UnmatchedCount => Rows.Count(row => row.Status == ManifestMatchingService.UnmatchedStatus);
-    public int AmbiguousCount => Rows.Count(row => row.Status == ManifestMatchingService.AmbiguousStatus);
+    public int MultipleMatchedCount => Rows.Count(row => row.Status == ManifestMatchingService.MultipleMatchedStatus);
     public int InvalidCount => Rows.Count(row => row.Status == ManifestMatchingService.InvalidStatus);
     public int EmptyImageCount => Rows.Count(row => row.Status == ManifestMatchingService.EmptyImageStatus);
     public int ScannedImageCount => Rows.Sum(row => row.ImageCount);
@@ -43,7 +45,7 @@ internal static class ManifestMatchingService
 {
     internal const string MatchedStatus = "已匹配";
     internal const string UnmatchedStatus = "未匹配";
-    internal const string AmbiguousStatus = "多目录冲突";
+    internal const string MultipleMatchedStatus = "多目录匹配";
     internal const string InvalidStatus = "清单数据无效";
     internal const string EmptyImageStatus = "已匹配但无图片";
 
@@ -59,6 +61,8 @@ internal static class ManifestMatchingService
             throw new DirectoryNotFoundException($"图片根目录不存在：{options.ImageRoot}");
         if (options.FolderLevel < 1)
             throw new InvalidOperationException("匹配文件夹层级必须大于或等于 1。根目录的直接子文件夹为第 1 级。");
+        if (options.TimeToleranceSeconds < 0)
+            throw new InvalidOperationException("时间容差秒数必须大于或等于 0。");
 
         string[] extensions = DetectionFiles.FormatExtensions.TryGetValue(options.ImageFormat, out var selected)
             ? selected
@@ -67,11 +71,26 @@ internal static class ManifestMatchingService
         List<string> candidateDirectories = EnumerateDirectoriesAtLevel(options.ImageRoot, options.FolderLevel);
         ExcelManifestTable table = ReadExcelWorkbook(options.WorkbookPath);
         ExcelManifestRow header = table.Rows[0];
-        int startTimeColumn = FindColumn(header.Cells, "start_time");
+        int createTimeColumn = FindColumn(header.Cells, "createTime");
         int serialNumberColumn = FindColumn(header.Cells, "serial_number");
 
         var matches = new List<ManifestMatchRow>();
-        var uniqueImages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var matchedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var imagesByDirectory = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        List<string> GetImages(string directory)
+        {
+            if (imagesByDirectory.TryGetValue(directory, out List<string>? cached))
+                return cached;
+            List<string> images = Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
+                .Where(path => allowedExtensions.Contains(Path.GetExtension(path)))
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .Select(Path.GetFullPath)
+                .ToList();
+            imagesByDirectory[directory] = images;
+            return images;
+        }
+
         for (int index = 1; index < table.Rows.Count; index++)
         {
             ExcelManifestRow excelRow = table.Rows[index];
@@ -79,61 +98,64 @@ internal static class ManifestMatchingService
                 continue;
 
             int excelRowNumber = excelRow.RowNumber;
-            string startTimeText = Cell(excelRow.Cells, startTimeColumn).Trim();
+            string createTimeText = Cell(excelRow.Cells, createTimeColumn).Trim();
             string serialNumber = Cell(excelRow.Cells, serialNumberColumn).Trim();
             if (serialNumber.Length == 0 ||
-                !TryParseStartTime(startTimeText, table.Uses1904DateSystem, out DateTime startTime))
+                !TryParseCreateTime(createTimeText, table.Uses1904DateSystem, out DateTime createTime))
             {
                 matches.Add(new ManifestMatchRow(
-                    excelRowNumber, startTimeText, null, serialNumber, string.Empty,
+                    excelRowNumber, createTimeText, null, serialNumber, string.Empty,
                     InvalidStatus, string.Empty, 0, string.Empty,
-                    serialNumber.Length == 0 ? "serial_number 为空。" : "start_time 无法解析。"));
+                    serialNumber.Length == 0 ? "serial_number 为空。" : "createTime 无法解析。"));
                 continue;
             }
 
-            string expectedKey = $"{serialNumber}_{startTime:yyyyMMdd'T'HHmmss}";
+            string expectedKey = $"{serialNumber}_{createTime:yyyyMMdd'T'HHmmss}";
             List<string> folders = candidateDirectories
-                .Where(path => Path.GetFileName(path).Contains(expectedKey, StringComparison.OrdinalIgnoreCase))
+                .Where(path => FolderMatches(
+                    path, serialNumber, createTime, options.TimeToleranceSeconds))
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             if (folders.Count == 0)
             {
                 matches.Add(new ManifestMatchRow(
-                    excelRowNumber, startTimeText, startTime, serialNumber, expectedKey,
+                    excelRowNumber, createTimeText, createTime, serialNumber, expectedKey,
                     UnmatchedStatus, string.Empty, 0, string.Empty,
-                    $"第 {options.FolderLevel} 级目录中未找到包含匹配键的文件夹。"));
+                    $"第 {options.FolderLevel} 级目录中未找到时间差在 ±{options.TimeToleranceSeconds} 秒内的匹配文件夹。"));
                 continue;
             }
-            if (folders.Count > 1)
-            {
-                matches.Add(new ManifestMatchRow(
-                    excelRowNumber, startTimeText, startTime, serialNumber, expectedKey,
-                    AmbiguousStatus, string.Join(" | ", folders), 0, string.Empty,
-                    $"找到 {folders.Count} 个候选文件夹，已跳过检测。"));
-                continue;
-            }
-
-            string matchedFolder = folders[0];
-            List<string> images = Directory.EnumerateFiles(matchedFolder, "*", SearchOption.TopDirectoryOnly)
-                .Where(path => allowedExtensions.Contains(Path.GetExtension(path)))
+            foreach (string folder in folders)
+                matchedDirectories.Add(folder);
+            List<string> images = folders
+                .SelectMany(GetImages)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .Select(Path.GetFullPath)
                 .ToList();
-            foreach (string image in images)
-                uniqueImages.Add(image);
 
             matches.Add(new ManifestMatchRow(
-                excelRowNumber, startTimeText, startTime, serialNumber, expectedKey,
-                images.Count == 0 ? EmptyImageStatus : MatchedStatus,
-                matchedFolder, images.Count, string.Join(Environment.NewLine, images),
-                images.Count == 0 ? $"文件夹内没有 {options.ImageFormat} 格式图片。" : string.Empty));
+                excelRowNumber, createTimeText, createTime, serialNumber, expectedKey,
+                images.Count == 0
+                    ? EmptyImageStatus
+                    : folders.Count > 1 ? MultipleMatchedStatus : MatchedStatus,
+                string.Join(" | ", folders), images.Count, string.Join(Environment.NewLine, images),
+                images.Count == 0
+                    ? $"匹配到的文件夹内没有 {options.ImageFormat} 格式图片。"
+                    : folders.Count > 1
+                        ? $"找到 {folders.Count} 个候选文件夹，已全部加入检测。"
+                        : string.Empty));
         }
+
+        List<string> uniqueImages = matchedDirectories
+            .SelectMany(GetImages)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         return new ManifestMatchResult
         {
             Rows = matches,
-            ImageFiles = uniqueImages.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList()
+            ImageFiles = uniqueImages
         };
     }
 
@@ -167,7 +189,39 @@ internal static class ManifestMatchingService
 
     private static string Cell(string[] row, int index) => index < row.Length ? row[index] : string.Empty;
 
-    private static bool TryParseStartTime(string text, bool uses1904DateSystem, out DateTime value)
+    private static bool FolderMatches(
+        string path, string serialNumber, DateTime createTime, int toleranceSeconds)
+    {
+        string folderName = Path.GetFileName(path);
+        string prefix = serialNumber + "_";
+        DateTime createTimeAtSecond = createTime.AddTicks(-(createTime.Ticks % TimeSpan.TicksPerSecond));
+        int searchStart = 0;
+        while (searchStart < folderName.Length)
+        {
+            int prefixIndex = folderName.IndexOf(prefix, searchStart, StringComparison.OrdinalIgnoreCase);
+            if (prefixIndex < 0)
+                return false;
+
+            int timestampStart = prefixIndex + prefix.Length;
+            const int TimestampLength = 15;
+            if (timestampStart + TimestampLength <= folderName.Length &&
+                DateTime.TryParseExact(
+                    folderName.Substring(timestampStart, TimestampLength),
+                    "yyyyMMdd'T'HHmmss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime folderTime) &&
+                Math.Abs((folderTime - createTimeAtSecond).TotalSeconds) <= toleranceSeconds)
+            {
+                return true;
+            }
+
+            searchStart = prefixIndex + 1;
+        }
+        return false;
+    }
+
+    private static bool TryParseCreateTime(string text, bool uses1904DateSystem, out DateTime value)
     {
         if (double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double serialDate) &&
             serialDate >= 0 && serialDate < 2957004)
@@ -216,7 +270,7 @@ internal static class ManifestMatchingService
                 continue;
             List<ExcelManifestRow> rows = ReadWorksheet(archive, target, sharedStrings);
             int headerIndex = rows.FindIndex(row =>
-                FindColumn(row.Cells, "start_time") >= 0 && FindColumn(row.Cells, "serial_number") >= 0);
+                FindColumn(row.Cells, "createTime") >= 0 && FindColumn(row.Cells, "serial_number") >= 0);
             if (headerIndex < 0)
                 continue;
             return new ExcelManifestTable(
@@ -226,7 +280,7 @@ internal static class ManifestMatchingService
         }
 
         throw new InvalidOperationException(
-            "Excel 工作簿中没有找到同时包含 start_time 和 serial_number 表头的工作表。");
+            "Excel 工作簿中没有找到同时包含 createTime 和 serial_number 表头的工作表。");
     }
 
     private static Dictionary<string, string> ReadWorkbookRelationships(ZipArchive archive)
@@ -371,11 +425,12 @@ internal static class ManifestAuditWorkbookWriter
             Row(4, TextCell("A4", "图片根目录", 2), TextCell("B4", Path.GetFullPath(options.ImageRoot))),
             Row(5, TextCell("A5", "匹配文件夹层级", 2), NumberCell("B5", options.FolderLevel)),
             Row(6, TextCell("A6", "图片格式", 2), TextCell("B6", options.ImageFormat)),
+            Row(7, TextCell("A7", "时间容差（秒）", 2), NumberCell("B7", options.TimeToleranceSeconds)),
             Row(8, TextCell("A8", "指标", 2), TextCell("B8", "数量", 2)),
             Row(9, TextCell("A9", "清单有效记录"), NumberCell("B9", result.RecordCount)),
             Row(10, TextCell("A10", "成功匹配记录"), NumberCell("B10", result.MatchedCount)),
             Row(11, TextCell("A11", "未匹配记录"), NumberCell("B11", result.UnmatchedCount)),
-            Row(12, TextCell("A12", "多目录冲突记录"), NumberCell("B12", result.AmbiguousCount)),
+            Row(12, TextCell("A12", "多目录匹配记录"), NumberCell("B12", result.MultipleMatchedCount)),
             Row(13, TextCell("A13", "无效清单记录"), NumberCell("B13", result.InvalidCount)),
             Row(14, TextCell("A14", "匹配但无图片记录"), NumberCell("B14", result.EmptyImageCount)),
             Row(15, TextCell("A15", "扫描图片数（含清单重复）"), NumberCell("B15", result.ScannedImageCount)),
@@ -386,7 +441,7 @@ internal static class ManifestAuditWorkbookWriter
 
     private static string DetailSheet(ManifestMatchResult result)
     {
-        string[] headers = ["Excel行号", "start_time", "serial_number", "匹配键", "状态", "匹配文件夹", "图片数", "图片路径", "说明"];
+        string[] headers = ["Excel行号", "createTime", "serial_number", "匹配键", "状态", "匹配文件夹", "图片数", "图片路径", "说明"];
         var rows = new List<string>
         {
             Row(1, headers.Select((header, i) => TextCell($"{Column(i + 1)}1", header, 2)).ToArray())
@@ -397,9 +452,9 @@ internal static class ManifestAuditWorkbookWriter
             int rowNumber = index + 2;
             rows.Add(Row(rowNumber,
                 NumberCell($"A{rowNumber}", item.ExcelRow),
-                item.StartTime is DateTime date
+                item.CreateTime is DateTime date
                     ? NumberCell($"B{rowNumber}", date.ToOADate(), 3)
-                    : TextCell($"B{rowNumber}", item.StartTimeText),
+                    : TextCell($"B{rowNumber}", item.CreateTimeText),
                 TextCell($"C{rowNumber}", item.SerialNumber),
                 TextCell($"D{rowNumber}", item.ExpectedKey),
                 TextCell($"E{rowNumber}", item.Status, StatusStyle(item.Status)),
@@ -419,7 +474,7 @@ internal static class ManifestAuditWorkbookWriter
     private static int StatusStyle(string status) => status switch
     {
         ManifestMatchingService.MatchedStatus => 4,
-        ManifestMatchingService.UnmatchedStatus or ManifestMatchingService.AmbiguousStatus => 5,
+        ManifestMatchingService.UnmatchedStatus or ManifestMatchingService.MultipleMatchedStatus => 5,
         ManifestMatchingService.InvalidStatus or ManifestMatchingService.EmptyImageStatus => 6,
         _ => 0
     };

@@ -98,7 +98,10 @@
                                 <TextBlock Text="目标文件夹层级" VerticalAlignment="Center"/>
                                 <TextBox x:Name="ManifestFolderLevelText" Text="2" Width="55" Margin="8,0,18,0"
                                          VerticalContentAlignment="Center"/>
-                                <TextBlock Text="根目录的直接子文件夹为第 1 级；匹配目录内部不递归"
+                                <TextBlock Text="时间容差（秒）" VerticalAlignment="Center"/>
+                                <TextBox x:Name="ManifestTimeToleranceText" Text="0" Width="55" Margin="8,0,18,0"
+                                         VerticalContentAlignment="Center"/>
+                                <TextBlock Text="前后容差；根目录的直接子文件夹为第 1 级；匹配目录内部不递归"
                                            Foreground="#687384" VerticalAlignment="Center"/>
                             </StackPanel>
 

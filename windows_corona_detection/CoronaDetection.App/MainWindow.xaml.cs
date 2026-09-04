@@ -98,7 +98,7 @@ public partial class MainWindow : Window
         {
             var dialog = new OpenFileDialog
             {
-                Title = "选择包含 start_time 和 serial_number 的 Excel 工作簿",
+                Title = "选择包含 createTime 和 serial_number 的 Excel 工作簿",
                 Filter = "Excel 工作簿|*.xlsx;*.xlsm|Excel 2007+|*.xlsx|启用宏的工作簿|*.xlsm"
             };
             if (dialog.ShowDialog(this) == true)
@@ -291,10 +291,14 @@ public partial class MainWindow : Window
             {
                 if (!int.TryParse(ManifestFolderLevelText.Text.Trim(), out int folderLevel) || folderLevel < 1)
                     throw new InvalidOperationException("目标文件夹层级必须是大于或等于 1 的整数。");
+                if (!int.TryParse(ManifestTimeToleranceText.Text.Trim(), out int timeToleranceSeconds) ||
+                    timeToleranceSeconds < 0)
+                    throw new InvalidOperationException("时间容差必须是大于或等于 0 的整数秒。");
                 var options = new ManifestMatchOptions(
                     inputRoot,
                     ManifestImageRootText.Text.Trim(),
                     folderLevel,
+                    timeToleranceSeconds,
                     FormatCombo.Text);
                 SetBusy(true, $"正在读取清单并扫描第 {folderLevel} 级文件夹…", true);
                 ManifestMatchResult matchResult;
