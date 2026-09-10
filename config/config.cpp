@@ -101,6 +101,7 @@ IqtFilterConfig LoadIqtFilter(const IniData& ini) {
     filter.center_y_max = GetFloatOr(ini, "IQT", "center_y_max", filter.center_y_max);
     filter.min_width_height_ratio = GetFloatOr(
         ini, "IQT", "min_width_height_ratio", filter.min_width_height_ratio);
+    filter.max_width = GetFloatOr(ini, "IQT", "max_width", filter.max_width);
 
     std::string categories;
     if (TryGetString(ini, "IQT", "categories", categories)) {
@@ -254,6 +255,10 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         }
         if (out.iqt_filter.min_width_height_ratio < 0.0f) {
             err = "IQT.min_width_height_ratio must be >= 0";
+            return false;
+        }
+        if (out.iqt_filter.max_width < 0.0f) {
+            err = "IQT.max_width must be >= 0";
             return false;
         }
         if (out.iqt_filter.categories.empty()) {

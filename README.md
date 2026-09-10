@@ -170,6 +170,7 @@ enabled = 0
 center_y_min = 665
 center_y_max = 715
 min_width_height_ratio = 3.0
+max_width = 0      # 宽度大于此值时也会过滤；0 表示关闭宽度条件
 categories = Stain
 ```
 

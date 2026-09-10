@@ -87,6 +87,8 @@ int TestConfigDefaults() {
     if (AssertTrue(cfg.aa_filter.min_width_height_ratio == 3.0f,
                    "AA filter default width-height ratio should be 3")) return 1;
     if (AssertTrue(!cfg.iqt_filter.enable, "IQT filter default should be disabled")) return 1;
+    if (AssertTrue(cfg.iqt_filter.max_width == 0.0f,
+                   "IQT width filtering should be disabled by default")) return 1;
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(!cfg.expand_defect_box, "expand_defect_box default should be false")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
@@ -378,6 +380,7 @@ int TestAaConfigParsing() {
                << "center_y_min=300.5\n"
                << "center_y_max=400.5\n"
                << "min_width_height_ratio=5.5\n"
+               << "max_width=120.5\n"
                << "categories= BrightStripes, stain\n"
                << "[Stain_config]\n"
                << "use_traditional_measure=1\n";
@@ -424,6 +427,8 @@ int TestAaConfigParsing() {
                    "IQT center Y range should be parsed independently from AA")) return 1;
     if (AssertTrue(config.iqt_filter.min_width_height_ratio == 5.5f,
                    "IQT ratio should be parsed independently from AA")) return 1;
+    if (AssertTrue(config.iqt_filter.max_width == 120.5f,
+                   "IQT maximum width should be parsed")) return 1;
     if (AssertTrue(config.iqt_filter.categories.size() == 2 &&
                    config.iqt_filter.categories[0] == "BrightStripes" &&
                    config.iqt_filter.categories[1] == "stain",
@@ -450,6 +455,8 @@ int TestIqtYoloFilterRules() {
     std::vector<InspectionDLL::DetectionResult> details = {
         MakeDetail("Stain", 285.0f, 81.0f, 20.0f),
         MakeDetail("Stain", 285.0f, 80.0f, 20.0f),
+        MakeDetail("Stain", 285.0f, 101.0f, 40.0f),
+        MakeDetail("Stain", 285.0f, 100.0f, 40.0f),
         MakeDetail("Stain", 385.0f, 81.0f, 20.0f),
         MakeDetail("BrightStripes", 285.0f, 81.0f, 20.0f)
     };
@@ -459,16 +466,19 @@ int TestIqtYoloFilterRules() {
     config.center_y_min = 290.0f;
     config.center_y_max = 310.0f;
     config.min_width_height_ratio = 4.0f;
+    config.max_width = 100.0f;
     config.categories = {"stain"};
     InspectionDLL::Internal::ApplyIqtYoloFilter(details, config);
 
-    if (AssertTrue(details.size() == 3,
-                   "IQT should remove only details matching its own category, Y range, and ratio")) return 1;
+    if (AssertTrue(details.size() == 4,
+                   "IQT should filter matching details that exceed either ratio or width")) return 1;
     if (AssertTrue(details[0].w == 80.0f,
                    "IQT should preserve a ratio equal to its threshold")) return 1;
-    if (AssertTrue(details[1].y == 385.0f,
+    if (AssertTrue(details[1].w == 100.0f,
+                   "IQT should preserve a width equal to its threshold")) return 1;
+    if (AssertTrue(details[2].y == 385.0f,
                    "IQT should preserve a center Y outside its configured range")) return 1;
-    if (AssertTrue(details[2].name == "BrightStripes",
+    if (AssertTrue(details[3].name == "BrightStripes",
                    "IQT should preserve categories outside its list")) return 1;
     return 0;
 }

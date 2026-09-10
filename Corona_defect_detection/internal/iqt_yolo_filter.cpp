@@ -25,12 +25,14 @@ bool ContainsCategory(const std::vector<std::string>& categories,
 bool ShouldFilter(const DetectionResult& detail,
                   const InspectionConfig::IqtFilterConfig& config) {
     if (!ContainsCategory(config.categories, detail.name)) return false;
-    if (detail.h <= 0.0f) return false;
 
     const float center_y = detail.y + detail.h * 0.5f;
     if (center_y < config.center_y_min || center_y > config.center_y_max) return false;
 
-    return detail.w / detail.h > config.min_width_height_ratio;
+    const bool exceeds_ratio =
+        detail.h > 0.0f && detail.w / detail.h > config.min_width_height_ratio;
+    const bool exceeds_width = config.max_width > 0.0f && detail.w > config.max_width;
+    return exceeds_ratio || exceeds_width;
 }
 
 }  // namespace
