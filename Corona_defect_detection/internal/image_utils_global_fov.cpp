@@ -100,7 +100,7 @@ float TailMean(std::vector<float> values, ContrastPolarity polarity, float backg
     }
     std::sort(values.begin(), values.end());
     const size_t tail_count = std::max<size_t>(
-        1, static_cast<size_t>(std::ceil(values.size() * 0.30)));
+        1, static_cast<size_t>(std::ceil(values.size() * 0.10)));
     const size_t begin = polarity == ContrastPolarity::Bright
                              ? values.size() - tail_count
                              : 0;

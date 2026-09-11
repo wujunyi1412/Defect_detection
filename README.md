@@ -179,7 +179,7 @@ categories = Stain
 
 每个类别过滤器支持：启用/禁用、置信度阈值（`confidence_threshold`）、对比度阈值（`contrast_threshold`）、最小宽/高/面积；`use_traditional_measure=1` 时使用传统图像算法重算面积、宽高与对比度（当前仅 Stain 启用）。对比度过滤方向由类别极性决定：暗缺陷保留 `contrast < 阈值`，亮缺陷保留 `contrast >= 阈值`，详见 [yolo_categories.h](Corona_defect_detection/internal/yolo_categories.h)。
 
-`contrast_mode=2` 时，背景亮度取整幅 FOV 的灰度中位数。统计前会剔除与图像四边连通的低灰度黑框；缺陷亮度按类别极性，取 mask 内最暗 30%（暗缺陷）或最亮 30%（亮缺陷）像素的平均值，最终对比度为 `缺陷亮度 / 背景亮度`。
+`contrast_mode=2` 时，背景亮度取整幅 FOV 的灰度中位数。统计前会剔除与图像四边连通的低灰度黑框；缺陷亮度按类别极性，取 mask 内最暗 10%（暗缺陷）或最亮 10%（亮缺陷）像素的平均值，最终对比度为 `缺陷亮度 / 背景亮度`。
 
 `[Abormal_config]` 额外支持双分数阈值：`score >= score_threshold_2` 直接判定异常；`score >= score_threshold_1` 时需同时满足 `area_ratio >= area_threshold_1`。
 
