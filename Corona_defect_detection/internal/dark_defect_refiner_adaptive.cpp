@@ -184,7 +184,9 @@ bool IsLongProductBoundary(const cv::Mat& outer_black_in_detection) {
 
 }  // namespace
 
-bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult& detail) {
+bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo,
+                                      DetectionResult& detail,
+                                      ContrastCalculationMode contrast_mode) {
     if (gray_yolo.empty() || gray_yolo.channels() != 1) return false;
 
     // 计算检测框的坐标和宽高，确保其在图像内
@@ -333,9 +335,9 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo, DetectionResult&
     const int refined_x = detection.x + refined.x;
     const int refined_y = detection.y + refined.y;
     const cv::Mat refined_mask = final_mask(refined);
-    const float refined_contrast = CalculateContrastRatioAdaptive(
+    const float refined_contrast = CalculateContrastRatioByMode(
         gray_yolo, refined_mask, refined_x, refined_y, refined.width, refined.height,
-        ContrastPolarity::Dark);
+        ContrastPolarity::Dark, contrast_mode);
 
     detail.x = static_cast<float>(refined_x);
     detail.y = static_cast<float>(refined_y);

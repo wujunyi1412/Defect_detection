@@ -10,7 +10,8 @@
 namespace InspectionDLL::Internal {
 
 YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
-                        const cv::Mat& gray_yolo) {
+                        const cv::Mat& gray_yolo,
+                        ContrastCalculationMode contrast_mode) {
     YoloDerived result;
     result.has_detections = false;
     result.score = 0.0f;
@@ -64,8 +65,9 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
             detail.area = 1;
         }
 
-        detail.contrast = CalculateContrastRatioAdaptive(gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
-                                                 category->contrast_polarity);
+        detail.contrast = CalculateContrastRatioByMode(
+            gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
+            category->contrast_polarity, contrast_mode);
 
         result.details.push_back(detail);
     }

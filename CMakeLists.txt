@@ -107,6 +107,7 @@ set(DLL_SOURCES
     Corona_defect_detection/internal/overlay_renderer.cpp
     Corona_defect_detection/internal/image_utils.cpp
     Corona_defect_detection/internal/image_utils_adaptive.cpp
+    Corona_defect_detection/internal/image_utils_global_fov.cpp
     Corona_defect_detection/internal/aa_yolo_filter.cpp
     Corona_defect_detection/internal/iqt_yolo_filter.cpp
     Corona_defect_detection/internal/dark_defect_refiner.cpp
@@ -271,6 +272,7 @@ if(BUILD_SMOKE_TESTS)
         Corona_defect_detection/internal/overlay_renderer.cpp
         Corona_defect_detection/internal/image_utils.cpp
         Corona_defect_detection/internal/image_utils_adaptive.cpp
+        Corona_defect_detection/internal/image_utils_global_fov.cpp
         Corona_defect_detection/internal/aa_yolo_filter.cpp
         Corona_defect_detection/internal/iqt_yolo_filter.cpp
         Corona_defect_detection/internal/dark_defect_refiner.cpp

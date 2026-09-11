@@ -55,7 +55,9 @@ void ComposeOutput(const PatchCoreDerived& pc,
             h1 = std::max(1, std::min(h1, img_shape.height - y1));
 
             const int area = static_cast<int>(std::round(static_cast<float>(c.area) * pc.scale_x * pc.scale_y));
-            const float contrast = CalculateContrastRatio(gray_patchcore, pc.score_orig, x1, y1, w1, h1);
+            const float contrast = CalculateContrastRatioByMode(
+                gray_patchcore, pc.score_orig, x1, y1, w1, h1,
+                ContrastPolarity::Auto, context.contrast_mode);
 
             DetectionResult detail;
             detail.name = "Abnormal";
@@ -121,7 +123,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
 
         DetectionResult detail = d;
         if (cf->use_traditional_measure) {
-            RefineDarkDefectGeometryAdaptive(gray_yolo, detail);
+            RefineDarkDefectGeometryAdaptive(gray_yolo, detail, context.contrast_mode);
         }
         if (!cf->enable) continue;
         if (detail.score < cf->confidence_threshold) continue;
@@ -172,7 +174,9 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
             h1 = std::max(1, std::min(h1, img_shape.height - y1));
 
             const int area = static_cast<int>(std::round(static_cast<float>(c.area) * pc.scale_x * pc.scale_y));
-            const float contrast = CalculateContrastRatio(gray_patchcore, pc.score_orig, x1, y1, w1, h1);
+            const float contrast = CalculateContrastRatioByMode(
+                gray_patchcore, pc.score_orig, x1, y1, w1, h1,
+                ContrastPolarity::Auto, context.contrast_mode);
             if (context.abnormal_filter.min_width > 0 && w1 < context.abnormal_filter.min_width) continue;
             if (context.abnormal_filter.min_height > 0 && h1 < context.abnormal_filter.min_height) continue;
             if (context.abnormal_filter.min_area > 0 && area < context.abnormal_filter.min_area) continue;

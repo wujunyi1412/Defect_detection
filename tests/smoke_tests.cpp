@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -80,6 +81,8 @@ int TestConfigDefaults() {
     if (AssertTrue(cfg.patchcore_enabled, "patchcore_enabled default should be true")) return 1;
     if (AssertTrue(cfg.patchcore_yolo_iou_threshold == 0.0f,
                    "PatchCore/YOLO IoU threshold default should be zero")) return 1;
+    if (AssertTrue(cfg.contrast_mode == 1,
+                   "adaptive contrast calculation should remain the default")) return 1;
     if (AssertTrue(!cfg.aa_filter.enable, "AA filter default should be disabled")) return 1;
     if (AssertTrue(cfg.aa_filter.center_y_min == 665.0f &&
                    cfg.aa_filter.center_y_max == 715.0f,
@@ -359,6 +362,7 @@ int TestAaConfigParsing() {
                << "enabled=0\n"
                << "[post]\n"
                << "patchcore_yolo_iou_threshold=0.25\n"
+               << "contrast_mode=2\n"
                << "[AA]\n"
                << "enabled=1\n"
                << "center_y_min=100.5\n"
@@ -395,6 +399,8 @@ int TestAaConfigParsing() {
     if (AssertTrue(loaded, "AA config should load: " + error)) return 1;
     if (AssertTrue(config.patchcore_yolo_iou_threshold == 0.25f,
                    "PatchCore/YOLO IoU threshold should be parsed")) return 1;
+    if (AssertTrue(config.contrast_mode == 2,
+                   "contrast calculation mode should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.enable, "AA config enabled flag should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.center_y_min == 100.5f &&
                    config.aa_filter.center_y_max == 200.5f,
@@ -439,6 +445,31 @@ int TestAaConfigParsing() {
                    "Stain traditional measurement should be configuration-driven")) return 1;
     if (AssertTrue(!config.category_filters.at("Glue_overflow").use_traditional_measure,
                    "other categories should not enable traditional measurement by default")) return 1;
+    return 0;
+}
+
+int TestGlobalFovContrastExcludesBlackFrame() {
+    cv::Mat gray(100, 100, CV_8U, cv::Scalar(0));
+    gray(cv::Rect(20, 20, 60, 60)).setTo(100);
+    const cv::Rect defect_rect(40, 40, 20, 20);
+    cv::Mat mask = cv::Mat::zeros(gray.size(), CV_8U);
+    mask(defect_rect).setTo(255);
+
+    gray(defect_rect).setTo(50);
+    const float dark_ratio = InspectionDLL::Internal::CalculateContrastRatioByMode(
+        gray, mask, defect_rect.x, defect_rect.y, defect_rect.width, defect_rect.height,
+        InspectionDLL::Internal::ContrastPolarity::Dark,
+        InspectionDLL::Internal::ContrastCalculationMode::GlobalFovMedian);
+    if (AssertTrue(std::abs(dark_ratio - 0.5f) < 1e-5f,
+                   "global FOV mode should divide dark-tail mean by the non-frame median")) return 1;
+
+    gray(defect_rect).setTo(150);
+    const float bright_ratio = InspectionDLL::Internal::CalculateContrastRatioByMode(
+        gray, mask, defect_rect.x, defect_rect.y, defect_rect.width, defect_rect.height,
+        InspectionDLL::Internal::ContrastPolarity::Bright,
+        InspectionDLL::Internal::ContrastCalculationMode::GlobalFovMedian);
+    if (AssertTrue(std::abs(bright_ratio - 1.5f) < 1e-5f,
+                   "global FOV mode should divide bright-tail mean by the non-frame median")) return 1;
     return 0;
 }
 
@@ -583,6 +614,7 @@ int main() {
     if (TestPatchCoreAnyYoloIouFiltering()) return 1;
     if (TestAllYoloClassMappingsAndPolarities()) return 1;
     if (TestYoloPostprocessReusesBinaryMask()) return 1;
+    if (TestGlobalFovContrastExcludesBlackFrame()) return 1;
     if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;

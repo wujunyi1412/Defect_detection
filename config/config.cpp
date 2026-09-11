@@ -191,6 +191,10 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         err = "post.patchcore_yolo_iou_threshold must be in [0, 1]";
         return false;
     }
+    if (out.contrast_mode < 0 || out.contrast_mode > 2) {
+        err = "post.contrast_mode must be one of: 0, 1, 2";
+        return false;
+    }
     if (!ValidateColorChannel(out.defect_mask_color_r, "post.defect_mask_color_r", err)) return false;
     if (!ValidateColorChannel(out.defect_mask_color_g, "post.defect_mask_color_g", err)) return false;
     if (!ValidateColorChannel(out.defect_mask_color_b, "post.defect_mask_color_b", err)) return false;
@@ -339,6 +343,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
         "post",
         "patchcore_yolo_iou_threshold",
         out.patchcore_yolo_iou_threshold);
+    out.contrast_mode = GetIntOr(ini, "post", "contrast_mode", out.contrast_mode);
     out.draw_defect_box = GetBoolOr(ini, "post", "draw_defect_box", out.draw_defect_box);
     out.expand_defect_box = GetBoolOr(ini, "post", "expand_defect_box", out.expand_defect_box);
     out.draw_box_details = GetBoolOr(ini, "post", "draw_box_details", out.draw_box_details);

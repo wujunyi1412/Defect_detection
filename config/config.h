@@ -85,6 +85,7 @@ struct InspectionConfigData {
     float patchcore_area_threshold = 1.4f;
     float patchcore_mask_area_threshold = 0.3f;
     float patchcore_yolo_iou_threshold = 0.0f;
+    int contrast_mode = 1;
     bool draw_defect_box = true;
     bool expand_defect_box = false;
     bool draw_box_details = true;

@@ -23,6 +23,13 @@ enum class ContrastPolarity {
     Bright,
 };
 
+// Config values used by [post].contrast_mode.
+enum class ContrastCalculationMode {
+    LocalRing = 0,
+    AdaptiveLocalPlane = 1,
+    GlobalFovMedian = 2,
+};
+
 // A finite value, including 0.0f, is a successfully calculated contrast ratio.
 // NaN represents a calculation failure.
 bool IsContrastRatioValid(float contrast_ratio);
@@ -43,5 +50,20 @@ float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
                                      int w,
                                      int h,
                                      ContrastPolarity polarity = ContrastPolarity::Auto);
+float CalculateContrastRatioGlobalFov(const cv::Mat& gray_img,
+                                      const cv::Mat& binary_mask,
+                                      int x,
+                                      int y,
+                                      int w,
+                                      int h,
+                                      ContrastPolarity polarity = ContrastPolarity::Auto);
+float CalculateContrastRatioByMode(const cv::Mat& gray_img,
+                                   const cv::Mat& binary_mask,
+                                   int x,
+                                   int y,
+                                   int w,
+                                   int h,
+                                   ContrastPolarity polarity,
+                                   ContrastCalculationMode mode);
 
 }  // namespace InspectionDLL::Internal

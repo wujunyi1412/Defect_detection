@@ -5,6 +5,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "patchcore_inference.h"
+#include "image_utils.h"
 
 namespace InspectionDLL::Internal {
 
@@ -43,6 +44,8 @@ PatchCoreDerived AnalyzePatchCore(const PatchCore::PatchCoreResult& patchcore_re
                                   const cv::Mat& gray_patchcore,
                                   float score_threshold,
                                   float area_threshold,
-                                  float mask_area_threshold);
+                                  float mask_area_threshold,
+                                  ContrastCalculationMode contrast_mode =
+                                      ContrastCalculationMode::AdaptiveLocalPlane);
 
 }  // namespace InspectionDLL::Internal

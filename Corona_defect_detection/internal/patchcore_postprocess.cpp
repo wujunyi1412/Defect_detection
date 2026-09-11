@@ -221,7 +221,8 @@ PatchCoreDerived AnalyzePatchCore(const PatchCore::PatchCoreResult& patchcore_re
                                   const cv::Mat& gray_patchcore,
                                   float score_threshold,
                                   float area_threshold,
-                                  float mask_area_threshold) {
+                                  float mask_area_threshold,
+                                  ContrastCalculationMode contrast_mode) {
     PatchCoreDerived result;
     result.score = patchcore_result.image_score;
     result.scale_x = patchcore_result.meta.new_w > 0 ? static_cast<float>(img_shape.width) / patchcore_result.meta.new_w : 0.0f;
@@ -234,7 +235,9 @@ PatchCoreDerived AnalyzePatchCore(const PatchCore::PatchCoreResult& patchcore_re
 
     if (!result.area_cropped.empty()) {
         result.area_orig = ResizePatchcoreMaskFromCropped(result.area_cropped, img_shape, cv::INTER_NEAREST);
-        result.contrast = CalculateContrastRatioAdaptive(gray_patchcore, result.area_orig, result.x, result.y, result.w, result.h);
+        result.contrast = CalculateContrastRatioByMode(
+            gray_patchcore, result.area_orig, result.x, result.y, result.w, result.h,
+            ContrastPolarity::Auto, contrast_mode);
     }
 
     if (std::abs(score_threshold - area_threshold) < 1e-6f) {

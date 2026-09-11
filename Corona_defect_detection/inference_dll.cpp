@@ -39,6 +39,8 @@ public:
     float area_threshold_ = 1.4f;
     float mask_area_threshold_ = 0.01f;
     float patchcore_yolo_iou_threshold_ = 0.0f;
+    Internal::ContrastCalculationMode contrast_mode_ =
+        Internal::ContrastCalculationMode::AdaptiveLocalPlane;
     bool draw_defect_box_ = true;
     bool expand_defect_box_ = false;
     bool draw_box_details_ = true;
@@ -68,6 +70,7 @@ public:
         Internal::ResultComposeContext context;
         context.score_threshold = score_threshold_;
         context.patchcore_yolo_iou_threshold = patchcore_yolo_iou_threshold_;
+        context.contrast_mode = contrast_mode_;
         context.abnormal_filter = abnormal_filter_;
         context.category_filters = category_filters_;
         context.aa_filter = aa_filter_;
@@ -111,6 +114,8 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->area_threshold_ = config.patchcore_area_threshold;
     pImpl->mask_area_threshold_ = config.patchcore_mask_area_threshold;
     pImpl->patchcore_yolo_iou_threshold_ = config.patchcore_yolo_iou_threshold;
+    pImpl->contrast_mode_ =
+        static_cast<Internal::ContrastCalculationMode>(config.contrast_mode);
     pImpl->draw_defect_box_ = config.draw_defect_box;
     pImpl->expand_defect_box_ = config.expand_defect_box;
     pImpl->draw_box_details_ = config.draw_box_details;
@@ -237,12 +242,14 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
                 images.patchcore_gray,
                 pImpl->score_threshold_,
                 pImpl->area_threshold_,
-                pImpl->mask_area_threshold_);
+                pImpl->mask_area_threshold_,
+                pImpl->contrast_mode_);
         }
         timing.patchcore_post_ms = postprocess_timer.RestartMilliseconds();
         Internal::YoloDerived yolo;
         if (yolo_success) {
-            yolo = Internal::AnalyzeYolo(yolo_detections, images.yolo_gray);
+            yolo = Internal::AnalyzeYolo(
+                yolo_detections, images.yolo_gray, pImpl->contrast_mode_);
         }
         timing.yolo_post_ms = postprocess_timer.RestartMilliseconds();
 
