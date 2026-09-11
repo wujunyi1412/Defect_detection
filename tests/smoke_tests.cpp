@@ -296,6 +296,30 @@ int TestPatchCoreAnyYoloIouFiltering() {
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.size() == 1 && output.details[0].name == "Abnormal",
                    "no YOLO details should always preserve PatchCore details")) return 1;
+
+    yolo.has_detections = true;
+    yolo.details = {yolo_detail_2};
+    context.patchcore_yolo_iou_threshold = 0.3f;
+    context.aa_filter.enable = true;
+    context.aa_filter.categories = {"BrightStripes"};
+    context.aa_filter.center_y_min = 0.0f;
+    context.aa_filter.center_y_max = 128.0f;
+    context.aa_filter.min_width_height_ratio = 0.5f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.empty() && output.result == "OK",
+                   "AA-filtered YOLO should first suppress overlapping PatchCore and then yield OK")) return 1;
+
+    context.aa_filter.enable = false;
+    context.iqt_filter.enable = true;
+    context.iqt_filter.categories = {"BrightStripes"};
+    context.iqt_filter.center_y_min = 0.0f;
+    context.iqt_filter.center_y_max = 128.0f;
+    context.iqt_filter.min_width_height_ratio = 0.5f;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.empty() && output.result == "OK",
+                   "IQT-filtered YOLO should first suppress overlapping PatchCore and then yield OK")) return 1;
     return 0;
 }
 

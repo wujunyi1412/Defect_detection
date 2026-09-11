@@ -136,8 +136,6 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         if (cf->min_area > 0 && detail.area < cf->min_area) continue;
         yolo_details_filtered.push_back(detail);
     }
-    ApplyAaYoloFilter(yolo_details_filtered, context.aa_filter);
-
     std::vector<DetectionResult> pc_details_filtered;
     const bool abnormal_enable = context.abnormal_filter.enable;
     const bool abnormal_by_score_area =
@@ -217,9 +215,11 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         pc_details_filtered,
         yolo_details_filtered,
         context.patchcore_yolo_iou_threshold);
+    ApplyAaYoloFilter(yolo_details_filtered, context.aa_filter);
     ApplyIqtYoloFilter(yolo_details_filtered, context.iqt_filter);
 
     const bool has_yolo_detections = !yolo_details_filtered.empty();
+    const bool has_patchcore_detections = !pc_details_filtered.empty();
 
     if (has_yolo_detections) {
         float max_score = 0.0f;
@@ -231,7 +231,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
     output.patchcore_score = pc.score;
     output.patchcore_area_ratio = pc.area_ratio;
 
-    if (has_yolo_detections || abnormal_is_ng) {
+    if (has_yolo_detections || has_patchcore_detections) {
         output.result = "NG";
     } else {
         output.result = "OK";
