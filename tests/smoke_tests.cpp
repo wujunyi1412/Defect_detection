@@ -13,6 +13,7 @@
 #include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
 #include "internal/result_builder.h"
+#include "internal/result_category_mapper.h"
 #include "internal/yolo_postprocess.h"
 #include "internal/yolo_categories.h"
 #include "logger.h"
@@ -410,6 +411,9 @@ int TestAaConfigParsing() {
                << "min_width_height_ratio=5.5\n"
                << "max_width=120.5\n"
                << "categories= BrightStripes, stain\n"
+               << "[category_mapping]\n"
+               << "Stain=SurfaceDefect\n"
+               << "BrightStripes=BrightLine\n"
                << "[Stain_config]\n"
                << "use_traditional_measure=1\n";
     }
@@ -465,10 +469,46 @@ int TestAaConfigParsing() {
                    "IQT category list should be trimmed and parsed")) return 1;
     if (AssertTrue(config.category_filters.size() == 8,
                    "all eight YOLO category filters should be available")) return 1;
+    if (AssertTrue(config.category_name_mapping.size() == 2 &&
+                   config.category_name_mapping.at("stain") == "SurfaceDefect" &&
+                   config.category_name_mapping.at("brightstripes") == "BrightLine",
+                   "category output-name mappings should be parsed case-insensitively")) return 1;
     if (AssertTrue(config.category_filters.at("Stain").use_traditional_measure,
                    "Stain traditional measurement should be configuration-driven")) return 1;
     if (AssertTrue(!config.category_filters.at("Glue_overflow").use_traditional_measure,
                    "other categories should not enable traditional measurement by default")) return 1;
+    return 0;
+}
+
+int TestResultCategoryMapping() {
+    InspectionConfig::CategoryNameMap mapping = {
+        {"stain", "SurfaceDefect"},
+        {"abnormal", "GenericDefect"},
+    };
+    InspectionDLL::DetectionResult stain;
+    stain.name = "Stain";
+    InspectionDLL::DetectionResult unchanged;
+    unchanged.name = "BrightStripes";
+    std::vector<InspectionDLL::DetectionResult> details = {stain, unchanged};
+
+    InspectionDLL::Internal::ApplyResultCategoryMapping(details, mapping);
+    if (AssertTrue(details[0].name == "SurfaceDefect",
+                   "configured result category should be renamed")) return 1;
+    if (AssertTrue(details[1].name == "BrightStripes",
+                   "unconfigured result category should retain its internal name")) return 1;
+
+    InspectionDLL::Internal::PatchCoreDerived patchcore;
+    InspectionDLL::Internal::YoloDerived yolo;
+    yolo.details = {stain};
+    InspectionDLL::Internal::ResultComposeContext context;
+    context.category_name_mapping = mapping;
+    InspectionDLL::InferenceResult output;
+    const cv::Mat gray(32, 32, CV_8U, cv::Scalar(128));
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+    if (AssertTrue(output.details.size() == 1 &&
+                   output.details[0].name == "SurfaceDefect",
+                   "category mapping should be applied to the final composed output")) return 1;
     return 0;
 }
 
@@ -634,6 +674,7 @@ int main() {
     if (TestAaYoloFilterRules()) return 1;
     if (TestIqtYoloFilterRules()) return 1;
     if (TestAaConfigParsing()) return 1;
+    if (TestResultCategoryMapping()) return 1;
     if (TestContrastThresholdUsesCategoryDirection()) return 1;
     if (TestPatchCoreAnyYoloIouFiltering()) return 1;
     if (TestAllYoloClassMappingsAndPolarities()) return 1;

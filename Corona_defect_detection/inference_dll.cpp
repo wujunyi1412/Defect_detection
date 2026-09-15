@@ -52,6 +52,7 @@ public:
 
     AbnormalFilter abnormal_filter_;
     InspectionConfig::CategoryFilterMap category_filters_;
+    InspectionConfig::CategoryNameMap category_name_mapping_;
     InspectionConfig::AaFilterConfig aa_filter_;
     InspectionConfig::IqtFilterConfig iqt_filter_;
 
@@ -73,6 +74,7 @@ public:
         context.contrast_mode = contrast_mode_;
         context.abnormal_filter = abnormal_filter_;
         context.category_filters = category_filters_;
+        context.category_name_mapping = category_name_mapping_;
         context.aa_filter = aa_filter_;
         context.iqt_filter = iqt_filter_;
         return context;
@@ -130,6 +132,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
 
     pImpl->abnormal_filter_ = config.abnormal_filter;
     pImpl->category_filters_ = config.category_filters;
+    pImpl->category_name_mapping_ = config.category_name_mapping;
     pImpl->aa_filter_ = config.aa_filter;
     pImpl->iqt_filter_ = config.iqt_filter;
 

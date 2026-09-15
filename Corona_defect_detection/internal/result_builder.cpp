@@ -8,6 +8,7 @@
 #include "image_utils.h"
 #include "iqt_yolo_filter.h"
 #include "patchcore_yolo_iou_filter.h"
+#include "result_category_mapper.h"
 #include "yolo_categories.h"
 
 namespace InspectionDLL::Internal {
@@ -239,6 +240,8 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
 
     output.details.clear();
     output.details.reserve(pc_details_filtered.size() + yolo_details_filtered.size());
+    ApplyResultCategoryMapping(pc_details_filtered, context.category_name_mapping);
+    ApplyResultCategoryMapping(yolo_details_filtered, context.category_name_mapping);
     output.details.insert(output.details.end(), pc_details_filtered.begin(), pc_details_filtered.end());
     output.details.insert(output.details.end(), yolo_details_filtered.begin(), yolo_details_filtered.end());
 }

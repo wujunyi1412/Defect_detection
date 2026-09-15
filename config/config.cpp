@@ -122,6 +122,22 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
     return filter;
 }
 
+CategoryNameMap LoadCategoryNameMapping(const IniData& ini) {
+    CategoryNameMap mapping;
+    const auto section = ini.sections.find("category_mapping");
+    if (section == ini.sections.end()) return mapping;
+
+    for (const auto& [source_name, configured_name] : section->second) {
+        const std::string output_name = TrimCopy(configured_name);
+        if (!source_name.empty() && !output_name.empty()) {
+            // INI keys are normalized to lower case by the parser. The mapper
+            // performs the same normalization on detected category names.
+            mapping[source_name] = output_name;
+        }
+    }
+    return mapping;
+}
+
 AbnormalFilterConfig LoadAbnormalFilter(const IniData& ini) {
     const bool use_legacy_section = ini.sections.find("abormal_config") != ini.sections.end();
     const std::string section = use_legacy_section ? "Abormal_config" : "Abnormal_config";
@@ -367,6 +383,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     for (const auto& entry : kYoloCategorySections) {
         out.category_filters.emplace(entry.first, LoadCategoryFilter(ini, entry.second));
     }
+    out.category_name_mapping = LoadCategoryNameMapping(ini);
     out.aa_filter = LoadAaFilter(ini);
     out.iqt_filter = LoadIqtFilter(ini);
 

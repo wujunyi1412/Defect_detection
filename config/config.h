@@ -28,6 +28,7 @@ struct AbnormalFilterConfig {
 };
 
 using CategoryFilterMap = std::unordered_map<std::string, CategoryFilterConfig>;
+using CategoryNameMap = std::unordered_map<std::string, std::string>;
 
 inline CategoryFilterMap DefaultCategoryFilters() {
     return {
@@ -104,6 +105,7 @@ struct InspectionConfigData {
     IqtFilterConfig iqt_filter;
     AbnormalFilterConfig abnormal_filter;
     CategoryFilterMap category_filters = DefaultCategoryFilters();
+    CategoryNameMap category_name_mapping;
 };
 
 bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& out, std::string& err);

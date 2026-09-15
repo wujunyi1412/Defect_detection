@@ -116,6 +116,7 @@ set(DLL_SOURCES
     Corona_defect_detection/internal/patchcore_postprocess.cpp
     Corona_defect_detection/internal/yolo_postprocess.cpp
     Corona_defect_detection/internal/result_builder.cpp
+    Corona_defect_detection/internal/result_category_mapper.cpp
     Corona_defect_detection/yolo_inference.cpp                   
     Corona_defect_detection/patchcore_inference.cpp             
     image_process/image_process.cpp      
@@ -142,6 +143,7 @@ set(DLL_HEADERS
     Corona_defect_detection/internal/yolo_postprocess.h
     Corona_defect_detection/internal/yolo_categories.h
     Corona_defect_detection/internal/result_builder.h
+    Corona_defect_detection/internal/result_category_mapper.h
     Corona_defect_detection/yolo_inference.h
     Corona_defect_detection/patchcore_inference.h
     image_process/image_process.h
@@ -279,6 +281,7 @@ if(BUILD_SMOKE_TESTS)
         Corona_defect_detection/internal/dark_defect_refiner_adaptive.cpp
         Corona_defect_detection/internal/patchcore_yolo_iou_filter.cpp
         Corona_defect_detection/internal/result_builder.cpp
+        Corona_defect_detection/internal/result_category_mapper.cpp
         Corona_defect_detection/internal/yolo_postprocess.cpp
         image_process/image_process.cpp
     )

@@ -181,6 +181,14 @@ categories = Stain
 
 `contrast_mode=2` 时，背景亮度取整幅 FOV 的灰度中位数。统计前会剔除与图像四边连通的低灰度黑框；缺陷亮度按类别极性，取 mask 内最暗 10%（暗缺陷）或最亮 10%（亮缺陷）像素的平均值，最终对比度为 `缺陷亮度 / 背景亮度`。
 
+最终输出类别名可以通过独立的映射配置修改。映射发生在所有类别过滤、IoU、AA 和 IQT 规则执行完毕之后，因此规则仍使用模型内部类别名；未配置的类别保持原名：
+
+```ini
+[category_mapping]
+Stain=SurfaceDefect
+BrightStripes=BrightLine
+```
+
 `[Abormal_config]` 额外支持双分数阈值：`score >= score_threshold_2` 直接判定异常；`score >= score_threshold_1` 时需同时满足 `area_ratio >= area_threshold_1`。
 
 ## API 使用

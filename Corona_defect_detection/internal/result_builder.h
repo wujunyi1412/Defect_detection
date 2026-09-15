@@ -14,6 +14,7 @@ struct ResultComposeContext {
     InspectionConfig::IqtFilterConfig iqt_filter;
     InspectionConfig::AbnormalFilterConfig abnormal_filter;
     InspectionConfig::CategoryFilterMap category_filters = InspectionConfig::DefaultCategoryFilters();
+    InspectionConfig::CategoryNameMap category_name_mapping;
 };
 
 void ComposeOutput(const PatchCoreDerived& pc,
