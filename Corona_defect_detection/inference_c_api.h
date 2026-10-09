@@ -16,7 +16,7 @@
 
 #define INSPECTION_MAX_DETECTIONS 128
 #define INSPECTION_MAX_NAME_LEN 32
-#define INSPECTION_DETECT_CATEGORIES 9
+#define INSPECTION_DETECT_CATEGORIES 6
 
 
 #define INSPECTION_RESULT_OK 0
@@ -37,17 +37,27 @@
 #define O_MESSAGE_LEN 100
 #define O_IMAGE_HANDLE 1
 
+// 定义缺陷类别枚举,模型实际检测的类别与此枚举顺序一致
+// enum class Defect_name {
+//     Abnormal = 0,
+//     Glue_overflow = 1,
+//     Decolorization = 2,
+//     Stain = 3,
+//     Stripes = 4,
+//     BrightStripes = 5,
+//     Bright_clusters = 6,
+//     Line_artifacts = 7,
+//     LineArtifacts = 8,
+// };
 
+// 将模型检测类别映射成最终输出类别
 enum class Defect_name {
     Abnormal = 0,
-    Glue_overflow = 1,
-    Decolorization = 2,
-    Stain = 3,
-    Stripes = 4,
-    BrightStripes = 5,
-    Bright_clusters = 6,
-    Line_artifacts = 7,
-    LineArtifacts = 8,
+    Stain = 1,
+    BrightClusters = 2,
+    GlueOverflow = 3,
+    Decolorization = 4,
+    LineArtifacts = 5,
 };
 
 typedef void* InspectionHandle;

@@ -46,17 +46,29 @@ bool EqualsIgnoreCase(const char* a, const char* b) {
     return *a == '\0' && *b == '\0';
 }
 
-// 将缺陷名称转换为缺陷索引
+// 将缺陷名称转换为缺陷索引 original
+// int32_t DefectNameToIndex(const char* name) {
+//     if (!name || name[0] == '\0') return -1;
+//     if (EqualsIgnoreCase(name, "Abnormal")) return static_cast<int32_t>(Defect_name::Abnormal);
+//     if (EqualsIgnoreCase(name, "Glue_overflow")) return static_cast<int32_t>(Defect_name::Glue_overflow);
+//     if (EqualsIgnoreCase(name, "Decolorization")) return static_cast<int32_t>(Defect_name::Decolorization);
+//     if (EqualsIgnoreCase(name, "Stain")) return static_cast<int32_t>(Defect_name::Stain);
+//     if (EqualsIgnoreCase(name, "Stripes")) return static_cast<int32_t>(Defect_name::Stripes);
+//     if (EqualsIgnoreCase(name, "BrightStripes")) return static_cast<int32_t>(Defect_name::BrightStripes);
+//     if (EqualsIgnoreCase(name, "Bright_clusters")) return static_cast<int32_t>(Defect_name::Bright_clusters);
+//     if (EqualsIgnoreCase(name, "Line_artifacts")) return static_cast<int32_t>(Defect_name::Line_artifacts);
+//     if (EqualsIgnoreCase(name, "LineArtifacts")) return static_cast<int32_t>(Defect_name::LineArtifacts);
+//     return -1;
+// }
+
+// 将缺陷名称转换为缺陷索引 new
 int32_t DefectNameToIndex(const char* name) {
     if (!name || name[0] == '\0') return -1;
     if (EqualsIgnoreCase(name, "Abnormal")) return static_cast<int32_t>(Defect_name::Abnormal);
-    if (EqualsIgnoreCase(name, "Glue_overflow")) return static_cast<int32_t>(Defect_name::Glue_overflow);
-    if (EqualsIgnoreCase(name, "Decolorization")) return static_cast<int32_t>(Defect_name::Decolorization);
     if (EqualsIgnoreCase(name, "Stain")) return static_cast<int32_t>(Defect_name::Stain);
-    if (EqualsIgnoreCase(name, "Stripes")) return static_cast<int32_t>(Defect_name::Stripes);
-    if (EqualsIgnoreCase(name, "BrightStripes")) return static_cast<int32_t>(Defect_name::BrightStripes);
-    if (EqualsIgnoreCase(name, "Bright_clusters")) return static_cast<int32_t>(Defect_name::Bright_clusters);
-    if (EqualsIgnoreCase(name, "Line_artifacts")) return static_cast<int32_t>(Defect_name::Line_artifacts);
+    if (EqualsIgnoreCase(name, "BrightClusters")) return static_cast<int32_t>(Defect_name::BrightClusters);
+    if (EqualsIgnoreCase(name, "GlueOverflow")) return static_cast<int32_t>(Defect_name::GlueOverflow);
+    if (EqualsIgnoreCase(name, "Decolorization")) return static_cast<int32_t>(Defect_name::Decolorization);
     if (EqualsIgnoreCase(name, "LineArtifacts")) return static_cast<int32_t>(Defect_name::LineArtifacts);
     return -1;
 }
