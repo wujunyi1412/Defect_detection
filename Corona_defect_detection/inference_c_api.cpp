@@ -65,11 +65,18 @@ bool EqualsIgnoreCase(const char* a, const char* b) {
 int32_t DefectNameToIndex(const char* name) {
     if (!name || name[0] == '\0') return -1;
     if (EqualsIgnoreCase(name, "Abnormal")) return static_cast<int32_t>(Defect_name::Abnormal);
+    // Accept the original model category names as a fallback. Normally these
+    // names are converted by [category_mapping] before reaching the C API.
+    if (EqualsIgnoreCase(name, "Stripes")) return static_cast<int32_t>(Defect_name::Abnormal);
+    if (EqualsIgnoreCase(name, "BrightStripes")) return static_cast<int32_t>(Defect_name::Abnormal);
     if (EqualsIgnoreCase(name, "Stain")) return static_cast<int32_t>(Defect_name::Stain);
     if (EqualsIgnoreCase(name, "BrightClusters")) return static_cast<int32_t>(Defect_name::BrightClusters);
+    if (EqualsIgnoreCase(name, "Bright_clusters")) return static_cast<int32_t>(Defect_name::BrightClusters);
     if (EqualsIgnoreCase(name, "GlueOverflow")) return static_cast<int32_t>(Defect_name::GlueOverflow);
+    if (EqualsIgnoreCase(name, "Glue_overflow")) return static_cast<int32_t>(Defect_name::GlueOverflow);
     if (EqualsIgnoreCase(name, "Decolorization")) return static_cast<int32_t>(Defect_name::Decolorization);
     if (EqualsIgnoreCase(name, "LineArtifacts")) return static_cast<int32_t>(Defect_name::LineArtifacts);
+    if (EqualsIgnoreCase(name, "Line_artifacts")) return static_cast<int32_t>(Defect_name::LineArtifacts);
     return -1;
 }
 

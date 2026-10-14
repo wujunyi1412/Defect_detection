@@ -16,7 +16,7 @@
 
 #define INSPECTION_MAX_DETECTIONS 128
 #define INSPECTION_MAX_NAME_LEN 32
-#define INSPECTION_DETECT_CATEGORIES 9
+#define INSPECTION_DETECT_CATEGORIES 6
 
 
 #define INSPECTION_RESULT_OK 0
@@ -34,14 +34,11 @@
 
 enum class Defect_name {
     Abnormal = 0,
-    Glue_overflow = 1,
-    Decolorization = 2,
-    Stain = 3,
-    Stripes = 4,
-    BrightStripes = 5,
-    Bright_clusters = 6,
-    Line_artifacts = 7,
-    LineArtifacts = 8,
+    Stain = 1,
+    BrightClusters = 2,
+    GlueOverflow = 3,
+    Decolorization = 4,
+    LineArtifacts = 5,
 };
 
 typedef void* InspectionHandle;

@@ -77,7 +77,7 @@ Corona_defect_detection/
 | `Inspection_Create` / `Inspection_Destroy` | 创建/销毁引擎实例 |
 | `Inspection_Initialize` | 加载配置 & 模型 |
 | `Inspection_ProcessFloatArray` | 推理 float 数组图像，返回结果 + Halcon 可视化图像 |
-| `Inspection_ProcessFloatArray_npy` | 同上，但按 5 个缺陷类别分数组输出 |
+| `Inspection_ProcessFloatArray_npy` | 同上，但按 6 个最终缺陷类别分数组输出 |
 | `Inspection_ProcessImagePath` | 从文件路径推理 |
 | `Inspection_SetThresholds` 等 | 运行时调参 |
 

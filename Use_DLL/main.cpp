@@ -26,15 +26,12 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr std::array<const char*, 9> kCategoryNames = {
+constexpr std::array<const char*, 6> kCategoryNames = {
     "Abnormal",
-    "Glue_overflow",
-    "Decolorization",
     "Stain",
-    "Stripes",
-    "BrightStripes",
-    "Bright_clusters",
-    "Line_artifacts",
+    "BrightClusters",
+    "GlueOverflow",
+    "Decolorization",
     "LineArtifacts",
 };
 
@@ -633,8 +630,8 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<FileResult>& result
     writer.write(reinterpret_cast<const char*>(utf8_bom), sizeof(utf8_bom));
     writer
         << "RepeatIndex,FileName,FilePath,InputType,Status,ReturnCode,Result,"
-           "AbnormalCount,GlueOverflowCount,DecolorizationCount,StainCount,StripesCount,"
-           "BrightStripesCount,BrightClustersCount,LineArtifactsUnderscoreCount,LineArtifactsCount,"
+           "AbnormalCount,StainCount,BrightClustersCount,GlueOverflowCount,"
+           "DecolorizationCount,LineArtifactsCount,"
            "TotalDetectCount,InferenceTimeMs,SaveTimeMs,"
            "TotalTimeMs,Message,OutputImagePath\n";
 
@@ -655,9 +652,6 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<FileResult>& result
                << counts[3] << ','
                << counts[4] << ','
                << counts[5] << ','
-               << counts[6] << ','
-               << counts[7] << ','
-               << counts[8] << ','
                << total_count << ','
                << std::fixed << std::setprecision(3)
                << item.inference_ms << ',';
