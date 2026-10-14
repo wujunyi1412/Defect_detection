@@ -41,10 +41,10 @@ inference_dll.cpp (主控)
 **输出**：`YoloDerived`（含 score、是否检测到缺陷、DetectionResult 列表）
 
 核心逻辑 `AnalyzeYolo()`：
-1. 遍历 YOLO 检测框，按 class_id 映射 8 类：Glue_overflow、Decolorization、Stain、Stripes、BrightStripes、Bright_clusters、Line_artifacts、LineArtifacts
+1. 遍历 YOLO 检测框，按 class_id 映射 10 类：Glue_overflow、Decolorization、Stain、Stripes、BrightStripes、Bright_clusters、Line_artifacts、LineArtifacts、Stripe_horizontal、Stripe_vertical；最后两个类别在最终结果阶段映射为 Abnormal
 2. 从分割 mask 计算缺陷面积
 3. 调用 `CalculateContrastRatio` 计算对比度
-4. 0/1/2/6 类使用暗缺陷极性，4/5/7 类使用亮缺陷极性，3 类使用自动极性
+4. 0/1/2/6 类使用暗缺陷极性，4/5/7 类使用亮缺陷极性，3/8/9 类使用自动极性
 
 ### 3. patchcore_postprocess — PatchCore 后处理
 

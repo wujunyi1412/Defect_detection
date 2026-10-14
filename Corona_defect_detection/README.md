@@ -109,7 +109,7 @@ Corona_defect_detection/
    - 实例分割 mask：`mask_coeff × proto → sigmoid → crop → resize → 阈值化`
 4. **Warm-up**：初始化时跑一次空推理预热
 
-输出 `Detection` 列表：`class_id` 按以下顺序映射：0=`Glue_overflow`、1=`Decolorization`、2=`Stain`、3=`Stripes`、4=`BrightStripes`、5=`Bright_clusters`、6=`Line_artifacts`、7=`LineArtifacts`，并包含置信度、边界框和二值 mask。
+输出 `Detection` 列表：`class_id` 按以下顺序映射：0=`Glue_overflow`、1=`Decolorization`、2=`Stain`、3=`Stripes`、4=`BrightStripes`、5=`Bright_clusters`、6=`Line_artifacts`、7=`LineArtifacts`、8=`Stripe_horizontal`、9=`Stripe_vertical`，并包含置信度、边界框和二值 mask。新增的两个方向条纹类别最终通过 `[category_mapping]` 映射为 `Abnormal`。
 
 ### 5. config.ini — 配置文件
 
@@ -129,6 +129,8 @@ Corona_defect_detection/
 [Brightstripes_config]
 [Bright_clusters_config]
 [Line_artifacts_config]
+[Stripe_horizontal_config]
+[Stripe_vertical_config]
 [Lineartifacts_config]
 ```
 
@@ -173,7 +175,7 @@ Inspection_ProcessFloatArray()
     │                              │
     │                              ▼
     │                     AnalyzeYolo()
-    │                     (8 类 class_id 映射与亮暗对比度计算)
+    │                     (10 类 class_id 映射与亮暗对比度计算)
     │                              │
     │                              ▼
     │                     YoloDerived

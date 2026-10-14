@@ -203,7 +203,8 @@ int TestYoloPostprocessReusesBinaryMask() {
 int TestAllYoloClassMappingsAndPolarities() {
     constexpr const char* expected_names[] = {
         "Glue_overflow", "Decolorization", "Stain", "Stripes",
-        "BrightStripes", "Bright_clusters", "Line_artifacts", "LineArtifacts"
+        "BrightStripes", "Bright_clusters", "Line_artifacts", "LineArtifacts",
+        "Stripe_horizontal", "Stripe_vertical"
     };
     constexpr InspectionDLL::Internal::ContrastPolarity expected_polarities[] = {
         InspectionDLL::Internal::ContrastPolarity::Dark,
@@ -214,9 +215,11 @@ int TestAllYoloClassMappingsAndPolarities() {
         InspectionDLL::Internal::ContrastPolarity::Bright,
         InspectionDLL::Internal::ContrastPolarity::Dark,
         InspectionDLL::Internal::ContrastPolarity::Bright,
+        InspectionDLL::Internal::ContrastPolarity::Auto,
+        InspectionDLL::Internal::ContrastPolarity::Auto,
     };
 
-    for (int class_id = 0; class_id < 8; ++class_id) {
+    for (int class_id = 0; class_id < 10; ++class_id) {
         const auto* category = InspectionDLL::Internal::FindYoloCategory(class_id);
         if (AssertTrue(category != nullptr, "every YOLO class id should have a definition")) return 1;
         if (AssertTrue(category->name == std::string(expected_names[class_id]),
@@ -467,8 +470,8 @@ int TestAaConfigParsing() {
                    config.iqt_filter.categories[0] == "BrightStripes" &&
                    config.iqt_filter.categories[1] == "stain",
                    "IQT category list should be trimmed and parsed")) return 1;
-    if (AssertTrue(config.category_filters.size() == 8,
-                   "all eight YOLO category filters should be available")) return 1;
+    if (AssertTrue(config.category_filters.size() == 10,
+                   "all ten YOLO category filters should be available")) return 1;
     if (AssertTrue(config.category_name_mapping.size() == 2 &&
                    config.category_name_mapping.at("stain") == "SurfaceDefect" &&
                    config.category_name_mapping.at("brightstripes") == "BrightLine",
@@ -484,18 +487,27 @@ int TestResultCategoryMapping() {
     InspectionConfig::CategoryNameMap mapping = {
         {"stain", "SurfaceDefect"},
         {"abnormal", "GenericDefect"},
+        {"stripe_horizontal", "Abnormal"},
+        {"stripe_vertical", "Abnormal"},
     };
     InspectionDLL::DetectionResult stain;
     stain.name = "Stain";
     InspectionDLL::DetectionResult unchanged;
     unchanged.name = "BrightStripes";
-    std::vector<InspectionDLL::DetectionResult> details = {stain, unchanged};
+    InspectionDLL::DetectionResult horizontal_stripe;
+    horizontal_stripe.name = "Stripe_horizontal";
+    InspectionDLL::DetectionResult vertical_stripe;
+    vertical_stripe.name = "Stripe_vertical";
+    std::vector<InspectionDLL::DetectionResult> details = {
+        stain, unchanged, horizontal_stripe, vertical_stripe};
 
     InspectionDLL::Internal::ApplyResultCategoryMapping(details, mapping);
     if (AssertTrue(details[0].name == "SurfaceDefect",
                    "configured result category should be renamed")) return 1;
     if (AssertTrue(details[1].name == "BrightStripes",
                    "unconfigured result category should retain its internal name")) return 1;
+    if (AssertTrue(details[2].name == "Abnormal" && details[3].name == "Abnormal",
+                   "new stripe categories should map to Abnormal")) return 1;
 
     InspectionDLL::Internal::PatchCoreDerived patchcore;
     InspectionDLL::Internal::YoloDerived yolo;

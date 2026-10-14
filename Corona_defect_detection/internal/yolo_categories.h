@@ -14,7 +14,7 @@ struct YoloCategoryDefinition {
     bool keep_contrast_below_threshold;
 };
 
-inline constexpr std::array<YoloCategoryDefinition, 8> kYoloCategories = {{
+inline constexpr std::array<YoloCategoryDefinition, 10> kYoloCategories = {{
     {"Glue_overflow", ContrastPolarity::Dark, true},
     {"Decolorization", ContrastPolarity::Dark, true},
     {"Stain", ContrastPolarity::Dark, true},
@@ -23,6 +23,8 @@ inline constexpr std::array<YoloCategoryDefinition, 8> kYoloCategories = {{
     {"Bright_clusters", ContrastPolarity::Bright, false},
     {"Line_artifacts", ContrastPolarity::Dark, true},
     {"LineArtifacts", ContrastPolarity::Bright, false},
+    {"Stripe_horizontal", ContrastPolarity::Auto, false},
+    {"Stripe_vertical", ContrastPolarity::Auto, false},
 }};
 
 inline const YoloCategoryDefinition* FindYoloCategory(int class_id) {

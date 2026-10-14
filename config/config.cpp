@@ -14,7 +14,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr std::array<std::pair<const char*, const char*>, 8> kYoloCategorySections = {{
+constexpr std::array<std::pair<const char*, const char*>, 10> kYoloCategorySections = {{
     {"Glue_overflow", "glue_overflow_config"},
     {"Decolorization", "decolorization_config"},
     {"Stain", "stain_config"},
@@ -23,6 +23,8 @@ constexpr std::array<std::pair<const char*, const char*>, 8> kYoloCategorySectio
     {"Bright_clusters", "bright_clusters_config"},
     {"Line_artifacts", "line_artifacts_config"},
     {"LineArtifacts", "lineartifacts_config"},
+    {"Stripe_horizontal", "stripe_horizontal_config"},
+    {"Stripe_vertical", "stripe_vertical_config"},
 }};
 
 std::string TrimCopy(const std::string& value) {

@@ -40,6 +40,8 @@ inline CategoryFilterMap DefaultCategoryFilters() {
         {"Bright_clusters", {}},
         {"Line_artifacts", {}},
         {"LineArtifacts", {}},
+        {"Stripe_horizontal", {}},
+        {"Stripe_vertical", {}},
     };
 }
 
