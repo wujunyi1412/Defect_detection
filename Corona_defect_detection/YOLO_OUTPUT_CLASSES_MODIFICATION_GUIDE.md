@@ -62,7 +62,7 @@ features_per_detection = 4 + NUM_CLASSES + num_masks
 ```ini
 [Stripe_horizontal_config]
 Enable=True
-use_traditional_measure=0
+traditional_measure_mode=none
 confidence_threshold=0.25
 contrast_threshold=0
 min_width=0
@@ -71,7 +71,7 @@ min_area=0
 
 [Stripe_vertical_config]
 Enable=True
-use_traditional_measure=0
+traditional_measure_mode=none
 confidence_threshold=0.25
 contrast_threshold=0
 min_width=0

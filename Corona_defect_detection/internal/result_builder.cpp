@@ -123,8 +123,10 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         const InspectionConfig::CategoryFilterConfig* cf = &filter_it->second;
 
         DetectionResult detail = d;
-        if (cf->use_traditional_measure) {
+        if (cf->traditional_measure_mode == InspectionConfig::TraditionalMeasureMode::Dark) {
             RefineDarkDefectGeometryAdaptive(gray_yolo, detail, context.contrast_mode);
+        } else if (cf->traditional_measure_mode == InspectionConfig::TraditionalMeasureMode::Bright) {
+            RefineBrightDefectGeometryAdaptive(gray_yolo, detail, context.contrast_mode);
         }
         if (!cf->enable) continue;
         if (detail.score < cf->confidence_threshold) continue;

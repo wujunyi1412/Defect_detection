@@ -10,6 +10,11 @@
 namespace InspectionDLL::Internal {
 namespace {
 
+constexpr int kMaxDarkRefinedBoxWidth = 30;
+constexpr int kMaxDarkRefinedBoxHeight = 30;
+constexpr int kMaxBrightRefinedBoxWidth = 30;
+constexpr int kMaxBrightRefinedBoxHeight = 30;
+
 // 根据检测框的坐标和宽高，计算出一个 ROI 的矩形框，确保其在图像内
 cv::Rect ClampDetectionRect(const DetectionResult& detail, const cv::Size& image_size) {
     if (image_size.width <= 0 || image_size.height <= 0 ||
@@ -182,11 +187,12 @@ bool IsLongProductBoundary(const cv::Mat& outer_black_in_detection) {
            black_extent.width <= static_cast<int>(std::ceil(width * 0.60));
 }
 
-}  // namespace
-
-bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo,
-                                      DetectionResult& detail,
-                                      ContrastCalculationMode contrast_mode) {
+bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
+                                  DetectionResult& detail,
+                                  ContrastPolarity polarity,
+                                  int max_box_width,
+                                  int max_box_height,
+                                  ContrastCalculationMode contrast_mode) {
     if (gray_yolo.empty() || gray_yolo.channels() != 1) return false;
 
     // 计算检测框的坐标和宽高，确保其在图像内
@@ -194,8 +200,7 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo,
     if (detection.empty()) return false;
 
     // 可以二次处理的最大检测框边长
-    constexpr int kMaxRefinedBoxSide = 30;
-    if (detection.width > kMaxRefinedBoxSide || detection.height > kMaxRefinedBoxSide) {
+    if (detection.width > max_box_width || detection.height > max_box_height) {
         return false;
     }
 
@@ -257,11 +262,18 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo,
         }
     }
 
-    cv::Mat global_dark = fitted_background - context_f32;
-    cv::Mat local_dark = smooth_f32 - context_f32;
-    cv::max(global_dark, local_dark, global_dark);
-    cv::max(global_dark, 0.0, global_dark);
-    const cv::Mat response = global_dark(search);
+    cv::Mat global_response;
+    cv::Mat local_response;
+    if (polarity == ContrastPolarity::Bright) {
+        global_response = context_f32 - fitted_background;
+        local_response = context_f32 - smooth_f32;
+    } else {
+        global_response = fitted_background - context_f32;
+        local_response = smooth_f32 - context_f32;
+    }
+    cv::max(global_response, local_response, global_response);
+    cv::max(global_response, 0.0, global_response);
+    const cv::Mat response = global_response(search);
 
     double max_response = 0.0;
     cv::minMaxLoc(response, nullptr, &max_response);
@@ -337,7 +349,7 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo,
     const cv::Mat refined_mask = final_mask(refined);
     const float refined_contrast = CalculateContrastRatioByMode(
         gray_yolo, refined_mask, refined_x, refined_y, refined.width, refined.height,
-        ContrastPolarity::Dark, contrast_mode);
+        polarity, contrast_mode);
 
     detail.x = static_cast<float>(refined_x);
     detail.y = static_cast<float>(refined_y);
@@ -347,6 +359,24 @@ bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo,
     detail.mask = refined_mask.clone();
     if (IsContrastRatioValid(refined_contrast)) detail.contrast = refined_contrast;
     return true;
+}
+
+}  // namespace
+
+bool RefineDarkDefectGeometryAdaptive(const cv::Mat& gray_yolo,
+                                      DetectionResult& detail,
+                                      ContrastCalculationMode contrast_mode) {
+    return RefineDefectGeometryAdaptive(
+        gray_yolo, detail, ContrastPolarity::Dark,
+        kMaxDarkRefinedBoxWidth, kMaxDarkRefinedBoxHeight, contrast_mode);
+}
+
+bool RefineBrightDefectGeometryAdaptive(const cv::Mat& gray_yolo,
+                                        DetectionResult& detail,
+                                        ContrastCalculationMode contrast_mode) {
+    return RefineDefectGeometryAdaptive(
+        gray_yolo, detail, ContrastPolarity::Bright,
+        kMaxBrightRefinedBoxWidth, kMaxBrightRefinedBoxHeight, contrast_mode);
 }
 
 }  // namespace InspectionDLL::Internal

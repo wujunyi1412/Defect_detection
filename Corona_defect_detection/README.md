@@ -18,7 +18,7 @@ Corona_defect_detection/
     ├── image_utils             ← 图像预处理 & 统计工具
     ├── yolo_postprocess        ← YOLO 检测结果 → YoloDerived
     ├── patchcore_postprocess   ← PatchCore 异常图 → PatchCoreDerived
-    ├── dark_defect_refiner     ← 暗缺陷几何精修
+    ├── dark_defect_refiner     ← 暗/亮缺陷几何精修
     └── result_builder          ← 融合 + 过滤 → InferenceResult
 ```
 
@@ -134,14 +134,14 @@ Corona_defect_detection/
 [Lineartifacts_config]
 ```
 
-每个类别过滤器包含：`Enable`、`confidence_threshold`、`contrast_threshold`、`min_width/height/area` 和 `use_traditional_measure`。当前仅在 Stain 配置中开启传统图像精修，行为由配置控制。
+每个类别过滤器包含：`Enable`、`confidence_threshold`、`contrast_threshold`、`min_width/height/area` 和 `traditional_measure_mode`。细化模式支持 `none`（关闭）、`dark`（暗缺陷）和 `bright`（亮缺陷）；当前 Stain 配置为 `dark`，亮缺陷类别可按需配置为 `bright`。旧配置 `use_traditional_measure=1` 仍兼容，并按暗缺陷处理。
 
 ### 6. internal/ — 后处理模块
 
 详见 `internal/README.md`，负责：
 - 图像预处理 & 统计工具（`image_utils`）
 - YOLO/PatchCore 结果后处理（`yolo_postprocess` / `patchcore_postprocess`）
-- 暗缺陷几何精修（`dark_defect_refiner`）
+- 暗/亮缺陷几何精修（`dark_defect_refiner`，当前最大处理框为 30×30）
 - 双模型结果融合 & 类别过滤（`result_builder`）
 
 ---
@@ -182,7 +182,7 @@ Inspection_ProcessFloatArray()
     │
     └─→ ComposeOutputWithDefectFilter()
               │
-              ├── YOLO 过滤（按类别 filter，可选 RefineDarkDefectGeometryOnly）
+              ├── YOLO 过滤（按类别 filter，可选暗/亮缺陷自适应细化）
               ├── PatchCore 过滤（按 AbnormalFilter）
               └── OK/NG 判定
               │

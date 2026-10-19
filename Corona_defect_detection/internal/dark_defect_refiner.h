@@ -12,5 +12,9 @@ bool RefineDarkDefectGeometryAdaptive(
     const cv::Mat& gray_yolo,
     DetectionResult& detail,
     ContrastCalculationMode contrast_mode = ContrastCalculationMode::AdaptiveLocalPlane);
+bool RefineBrightDefectGeometryAdaptive(
+    const cv::Mat& gray_yolo,
+    DetectionResult& detail,
+    ContrastCalculationMode contrast_mode = ContrastCalculationMode::AdaptiveLocalPlane);
 
 }  // namespace InspectionDLL::Internal
