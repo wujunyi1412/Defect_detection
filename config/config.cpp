@@ -120,7 +120,18 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
     filter.min_width = GetIntOr(ini, section, "min_width", 0);
     filter.min_height = GetIntOr(ini, section, "min_height", 0);
     filter.min_area = GetIntOr(ini, section, "min_area", 0);
-    filter.use_traditional_measure = GetBoolOr(ini, section, "use_traditional_measure", false);
+    std::string configured_mode;
+    if (TryGetString(ini, section, "traditional_measure_mode", configured_mode)) {
+        const std::string mode = ToLowerCopy(TrimCopy(configured_mode));
+        if (mode == "dark") {
+            filter.traditional_measure_mode = TraditionalMeasureMode::Dark;
+        } else if (mode == "bright") {
+            filter.traditional_measure_mode = TraditionalMeasureMode::Bright;
+        }
+    } else if (GetBoolOr(ini, section, "use_traditional_measure", false)) {
+        // Backward compatibility: the legacy boolean only supported dark defects.
+        filter.traditional_measure_mode = TraditionalMeasureMode::Dark;
+    }
     return filter;
 }
 

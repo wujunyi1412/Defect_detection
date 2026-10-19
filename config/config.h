@@ -6,6 +6,12 @@
 
 namespace InspectionConfig {
 
+enum class TraditionalMeasureMode {
+    None,
+    Dark,
+    Bright,
+};
+
 struct CategoryFilterConfig {
     bool enable = true;
     float confidence_threshold = 0.0f;
@@ -13,7 +19,7 @@ struct CategoryFilterConfig {
     int min_width = 0;
     int min_height = 0;
     int min_area = 0;
-    bool use_traditional_measure = false;
+    TraditionalMeasureMode traditional_measure_mode = TraditionalMeasureMode::None;
 };
 
 struct AbnormalFilterConfig {

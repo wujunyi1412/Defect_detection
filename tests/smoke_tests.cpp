@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "internal/aa_yolo_filter.h"
+#include "internal/dark_defect_refiner.h"
 #include "internal/iqt_yolo_filter.h"
 #include "internal/image_utils.h"
 #include "internal/overlay_renderer.h"
@@ -104,6 +105,37 @@ int TestConfigDefaults() {
                    "defect mask default color should be red")) return 1;
     if (AssertTrue(cfg.defect_mask_alpha == 0.35f, "defect_mask_alpha default should be 0.35")) return 1;
     if (AssertTrue(cfg.log_enabled, "log_enabled default should be true")) return 1;
+    return 0;
+}
+
+int TestBrightDefectRefinement() {
+    cv::Mat gray(64, 64, CV_8U, cv::Scalar(100));
+    gray(cv::Rect(26, 27, 5, 4)).setTo(220);
+
+    InspectionDLL::DetectionResult detail;
+    detail.name = "Bright_clusters";
+    detail.x = 20.0f;
+    detail.y = 20.0f;
+    detail.w = 20.0f;
+    detail.h = 20.0f;
+    detail.area = 400;
+    detail.score = 0.9f;
+
+    const bool refined = InspectionDLL::Internal::RefineBrightDefectGeometryAdaptive(
+        gray, detail, InspectionDLL::Internal::ContrastCalculationMode::AdaptiveLocalPlane);
+    if (AssertTrue(refined, "bright defect should be refined")) return 1;
+    if (AssertTrue(detail.x >= 25.0f && detail.x <= 27.0f &&
+                       detail.y >= 26.0f && detail.y <= 28.0f &&
+                       detail.w <= 7.0f && detail.h <= 6.0f && detail.area > 0,
+                   "bright refinement should isolate the bright component")) return 1;
+
+    InspectionDLL::DetectionResult oversized = detail;
+    oversized.x = 10.0f;
+    oversized.y = 10.0f;
+    oversized.w = 31.0f;
+    oversized.h = 30.0f;
+    if (AssertTrue(!InspectionDLL::Internal::RefineBrightDefectGeometryAdaptive(gray, oversized),
+                   "bright refinement should use the same 30x30 limit as dark refinement")) return 1;
     return 0;
 }
 
@@ -418,6 +450,10 @@ int TestAaConfigParsing() {
                << "Stain=SurfaceDefect\n"
                << "BrightStripes=BrightLine\n"
                << "[Stain_config]\n"
+               << "traditional_measure_mode=dark\n"
+               << "[BrightStripes_config]\n"
+               << "traditional_measure_mode=bright\n"
+               << "[Decolorization_config]\n"
                << "use_traditional_measure=1\n";
     }
 
@@ -476,10 +512,18 @@ int TestAaConfigParsing() {
                    config.category_name_mapping.at("stain") == "SurfaceDefect" &&
                    config.category_name_mapping.at("brightstripes") == "BrightLine",
                    "category output-name mappings should be parsed case-insensitively")) return 1;
-    if (AssertTrue(config.category_filters.at("Stain").use_traditional_measure,
-                   "Stain traditional measurement should be configuration-driven")) return 1;
-    if (AssertTrue(!config.category_filters.at("Glue_overflow").use_traditional_measure,
-                   "other categories should not enable traditional measurement by default")) return 1;
+    if (AssertTrue(config.category_filters.at("Stain").traditional_measure_mode ==
+                       InspectionConfig::TraditionalMeasureMode::Dark,
+                    "Stain dark refinement should be configuration-driven")) return 1;
+    if (AssertTrue(config.category_filters.at("BrightStripes").traditional_measure_mode ==
+                       InspectionConfig::TraditionalMeasureMode::Bright,
+                    "bright refinement should be configuration-driven")) return 1;
+    if (AssertTrue(config.category_filters.at("Decolorization").traditional_measure_mode ==
+                       InspectionConfig::TraditionalMeasureMode::Dark,
+                    "legacy traditional measurement should map to dark refinement")) return 1;
+    if (AssertTrue(config.category_filters.at("Glue_overflow").traditional_measure_mode ==
+                       InspectionConfig::TraditionalMeasureMode::None,
+                    "other categories should not enable refinement by default")) return 1;
     return 0;
 }
 
@@ -683,6 +727,7 @@ int main() {
     if (TestOverlayTextFit()) return 1;
     if (TestFloatOverlayFileIs8Bit()) return 1;
     if (TestConfigDefaults()) return 1;
+    if (TestBrightDefectRefinement()) return 1;
     if (TestAaYoloFilterRules()) return 1;
     if (TestIqtYoloFilterRules()) return 1;
     if (TestAaConfigParsing()) return 1;
