@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Corona_defect_detection VERSION 3.0.0 LANGUAGES CXX)
+project(Corona_defect_detection VERSION 3.0.1 LANGUAGES CXX)
 
 include(CTest)
 add_subdirectory(evaluation_metrics)

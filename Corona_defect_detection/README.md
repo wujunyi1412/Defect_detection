@@ -119,7 +119,7 @@ Corona_defect_detection/
 [yolo]            # YOLO 阈值 & NMS 模式
 [patchcore]       # PatchCore 阈值
 [post]            # 后处理与输出图配置（concat_original_image=1 时左原图、右标注图）
-[AA]              # YOLO 最终结果的可配置区域/形状过滤
+[AA]              # YOLO 最终结果的中心 Y +（宽高比或最大宽度）及位置/尺寸过滤
 [IQT]             # 与 AA 独立配置的中心 Y/宽高比/宽度过滤（在 PatchCore/YOLO IoU 过滤后执行）
 [Abormal_config]  # Abnormal 类别过滤器（双阈值：score + area）
 [Glue_overflow_config]

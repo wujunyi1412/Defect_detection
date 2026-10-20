@@ -68,6 +68,7 @@ AaFilterConfig LoadAaFilter(const IniData& ini) {
     filter.center_y_max = GetFloatOr(ini, "AA", "center_y_max", filter.center_y_max);
     filter.min_width_height_ratio = GetFloatOr(
         ini, "AA", "min_width_height_ratio", filter.min_width_height_ratio);
+    filter.max_width = GetFloatOr(ini, "AA", "max_width", filter.max_width);
 
     std::string categories;
     if (TryGetString(ini, "AA", "categories", categories)) {
@@ -239,6 +240,10 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         }
         if (out.aa_filter.min_width_height_ratio < 0.0f) {
             err = "AA.min_width_height_ratio must be >= 0";
+            return false;
+        }
+        if (out.aa_filter.max_width < 0.0f) {
+            err = "AA.max_width must be >= 0";
             return false;
         }
         if (out.aa_filter.categories.empty()) {

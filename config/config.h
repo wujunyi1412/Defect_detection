@@ -56,6 +56,7 @@ struct AaFilterConfig {
     float center_y_min = 665.0f;
     float center_y_max = 715.0f;
     float min_width_height_ratio = 3.0f;
+    float max_width = 0.0f;
     std::vector<std::string> categories = {"Stain"};
 
     bool position_filter_enable = false;

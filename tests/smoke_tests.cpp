@@ -91,6 +91,8 @@ int TestConfigDefaults() {
                    "AA filter default center Y range should be [665, 715]")) return 1;
     if (AssertTrue(cfg.aa_filter.min_width_height_ratio == 3.0f,
                    "AA filter default width-height ratio should be 3")) return 1;
+    if (AssertTrue(cfg.aa_filter.max_width == 0.0f,
+                   "AA width filtering should be disabled by default")) return 1;
     if (AssertTrue(!cfg.iqt_filter.enable, "IQT filter default should be disabled")) return 1;
     if (AssertTrue(cfg.iqt_filter.max_width == 0.0f,
                    "IQT width filtering should be disabled by default")) return 1;
@@ -393,6 +395,20 @@ int TestAaYoloFilterRules() {
     if (AssertTrue(details[2].name == "BrightStripes",
                    "categories outside the configured list should be preserved")) return 1;
 
+    std::vector<InspectionDLL::DetectionResult> width_details = {
+        MakeDetail("Stain", 0.0f, 680.0f, 101.0f, 40.0f),
+        MakeDetail("Stain", 0.0f, 680.0f, 100.0f, 40.0f),
+        MakeDetail("Stain", 0.0f, 720.0f, 101.0f, 40.0f)
+    };
+    config.max_width = 100.0f;
+    InspectionDLL::Internal::ApplyAaYoloFilter(width_details, config);
+    if (AssertTrue(width_details.size() == 2,
+                   "AA should filter a matching bottom-band detail that exceeds max width")) return 1;
+    if (AssertTrue(width_details[0].w == 100.0f,
+                   "AA should preserve a width equal to its threshold")) return 1;
+    if (AssertTrue(width_details[1].y == 720.0f,
+                   "AA width filtering should still require the configured center Y range")) return 1;
+
     std::vector<InspectionDLL::DetectionResult> position_details = {
         MakeDetail("Stain", 454.22f, 304.30f, 170.52f, 211.39f),
         MakeDetail("Stain", 429.0f, 304.30f, 170.52f, 211.39f),
@@ -428,6 +444,7 @@ int TestAaConfigParsing() {
                << "center_y_min=100.5\n"
                << "center_y_max=200.5\n"
                << "min_width_height_ratio=4.5\n"
+               << "max_width=90.5\n"
                << "categories= stain, LineArtifacts\n"
                << "position_filter_enabled=1\n"
                << "position_x_min=10.5\n"
@@ -474,6 +491,8 @@ int TestAaConfigParsing() {
                    "AA center Y range should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.min_width_height_ratio == 4.5f,
                    "AA ratio should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.max_width == 90.5f,
+                   "AA maximum width should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.categories.size() == 2 &&
                    config.aa_filter.categories[0] == "stain" &&
                    config.aa_filter.categories[1] == "LineArtifacts",
