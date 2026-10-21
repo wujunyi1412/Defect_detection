@@ -635,6 +635,39 @@ int TestGlobalFovContrastExcludesBlackFrame() {
     return 0;
 }
 
+int TestAdaptiveContrastUsesExpandedLocalBackground() {
+    cv::Mat gray(80, 80, CV_8U);
+    for (int y = 0; y < gray.rows; ++y) {
+        uchar* row = gray.ptr<uchar>(y);
+        for (int x = 0; x < gray.cols; ++x) {
+            row[x] = static_cast<uchar>(80 + x / 2 + y / 4);
+        }
+    }
+
+    const cv::Rect defect_rect(38, 39, 4, 3);
+    cv::Mat mask(gray.size(), CV_8U, cv::Scalar(0));
+    mask(defect_rect).setTo(255);
+    gray(defect_rect).setTo(70);
+    const float center_ratio = InspectionDLL::Internal::CalculateContrastRatioAdaptive(
+        gray, mask, defect_rect.x, defect_rect.y, defect_rect.width, defect_rect.height,
+        InspectionDLL::Internal::ContrastPolarity::Dark);
+    if (AssertTrue(InspectionDLL::Internal::IsContrastRatioValid(center_ratio) &&
+                       center_ratio > 0.55f && center_ratio < 0.80f,
+                   "expanded adaptive background should recover a dark defect on a gradient")) return 1;
+
+    const cv::Rect edge_rect(1, 2, 4, 3);
+    mask.setTo(0);
+    mask(edge_rect).setTo(255);
+    gray(edge_rect).setTo(55);
+    const float edge_ratio = InspectionDLL::Internal::CalculateContrastRatioAdaptive(
+        gray, mask, edge_rect.x, edge_rect.y, edge_rect.width, edge_rect.height,
+        InspectionDLL::Internal::ContrastPolarity::Dark);
+    if (AssertTrue(InspectionDLL::Internal::IsContrastRatioValid(edge_ratio) &&
+                       edge_ratio > 0.50f && edge_ratio < 0.85f,
+                   "adaptive ring expansion should retain enough background near an image edge")) return 1;
+    return 0;
+}
+
 int TestIqtYoloFilterRules() {
     auto MakeDetail = [](const std::string& name, float y, float width, float height) {
         InspectionDLL::DetectionResult detail;
@@ -903,6 +936,7 @@ int main() {
     if (TestAllYoloClassMappingsAndPolarities()) return 1;
     if (TestYoloPostprocessReusesBinaryMask()) return 1;
     if (TestGlobalFovContrastExcludesBlackFrame()) return 1;
+    if (TestAdaptiveContrastUsesExpandedLocalBackground()) return 1;
     if (TestDefectBoxExpansionClipsToImage()) return 1;
     if (TestLoggerLevelQuery()) return 1;
     if (TestCombinedInferencePreprocessingMatchesLegacyPath()) return 1;

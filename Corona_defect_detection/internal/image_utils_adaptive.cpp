@@ -218,10 +218,14 @@ float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
     if (foreground_area <= 0) return InvalidContrastRatio();
 
     const double equivalent_radius = std::sqrt(static_cast<double>(foreground_area) / CV_PI);
-    const int inner_radius = std::clamp(static_cast<int>(std::round(equivalent_radius * 0.20)), 2, 8);
-    const int outer_radius = std::clamp(static_cast<int>(std::round(equivalent_radius * 0.80)),
-                                        inner_radius + 4, 32);
-    const cv::Rect context = ExpandRect(detection, outer_radius + 2, gray_img.size());
+    // Keep the background guard farther away from interpolated/uncertain mask edges,
+    // and start with a wider ring than the legacy 0.20r/0.80r geometry.
+    const int inner_radius = std::clamp(
+        static_cast<int>(std::round(equivalent_radius * 0.35)), 2, 10);
+    const int initial_outer_radius = std::clamp(
+        static_cast<int>(std::round(equivalent_radius * 1.20)), inner_radius + 6, 40);
+    const int max_outer_radius = std::min(48, initial_outer_radius + 16);
+    const cv::Rect context = ExpandRect(detection, max_outer_radius + 2, gray_img.size());
     const cv::Rect detection_in_context(detection.x - context.x, detection.y - context.y,
                                         detection.width, detection.height);
 
@@ -232,17 +236,31 @@ float CalculateContrastRatioAdaptive(const cv::Mat& gray_img,
 
     const cv::Mat inner_kernel = cv::getStructuringElement(
         cv::MORPH_ELLIPSE, cv::Size(2 * inner_radius + 1, 2 * inner_radius + 1));
-    const cv::Mat outer_kernel = cv::getStructuringElement(
-        cv::MORPH_ELLIPSE, cv::Size(2 * outer_radius + 1, 2 * outer_radius + 1));
     cv::Mat inner_dilated;
-    cv::Mat outer_dilated;
     cv::dilate(foreground_mask, inner_dilated, inner_kernel);
-    cv::dilate(foreground_mask, outer_dilated, outer_kernel);
-    cv::Mat background_ring;
-    cv::bitwise_and(outer_dilated, ~inner_dilated, background_ring);
     const int transition_guard = std::clamp(std::min(detection.width, detection.height) / 12, 1, 3);
     const cv::Mat outer_dark_region = FindOuterDarkRegion(gray_f32, transition_guard);
-    background_ring.setTo(0, outer_dark_region);
+
+    // Expand in small steps only when the clean ring does not contain enough
+    // samples. This improves small/edge detections without always pulling in
+    // distant product structures.
+    const int target_background_pixels = std::max(
+        48, static_cast<int>(std::ceil(static_cast<double>(foreground_area) * 1.5)));
+    cv::Mat background_ring;
+    for (int outer_radius = initial_outer_radius;;
+         outer_radius = std::min(max_outer_radius, outer_radius + 4)) {
+        const cv::Mat outer_kernel = cv::getStructuringElement(
+            cv::MORPH_ELLIPSE, cv::Size(2 * outer_radius + 1, 2 * outer_radius + 1));
+        cv::Mat outer_dilated;
+        cv::dilate(foreground_mask, outer_dilated, outer_kernel);
+        cv::bitwise_and(outer_dilated, ~inner_dilated, background_ring);
+        background_ring.setTo(0, outer_dark_region);
+
+        if (cv::countNonZero(background_ring) >= target_background_pixels ||
+            outer_radius >= max_outer_radius) {
+            break;
+        }
+    }
 
     std::vector<BackgroundSample> background_samples;
     background_samples.reserve(static_cast<size_t>(cv::countNonZero(background_ring)));
