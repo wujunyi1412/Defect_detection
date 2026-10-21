@@ -471,9 +471,11 @@ int TestAaConfigParsing() {
                << "contrast_threshold_1=0.8\n"
                << "contrast_threshold_2=0.9\n"
                << "contrast_direction=less_equal\n"
+               << "confidence_threshold_1=0.5\n"
                << "min_width_1=5\n"
                << "min_height_1=6\n"
                << "min_area_1=30\n"
+               << "confidence_threshold_2=0.7\n"
                << "min_width_2=10\n"
                << "min_height_2=12\n"
                << "min_area_2=60\n"
@@ -548,8 +550,10 @@ int TestAaConfigParsing() {
                        stain_filter.contrast_threshold_2 == 0.9f &&
                        stain_filter.contrast_direction ==
                            InspectionConfig::ContrastFilterDirection::LessEqual &&
+                       stain_filter.confidence_threshold_1 == 0.5f &&
                        stain_filter.min_width_1 == 5 && stain_filter.min_height_1 == 6 &&
                        stain_filter.min_area_1 == 30 &&
+                       stain_filter.confidence_threshold_2 == 0.7f &&
                        stain_filter.min_width_2 == 10 && stain_filter.min_height_2 == 12 &&
                        stain_filter.min_area_2 == 60,
                    "tiered YOLO contrast and geometry settings should be parsed")) return 1;
@@ -777,9 +781,11 @@ int TestTieredYoloContrastAndSizeFiltering() {
     filter.contrast_threshold_1 = 0.8f;
     filter.contrast_threshold_2 = 0.9f;
     filter.contrast_direction = InspectionConfig::ContrastFilterDirection::LessEqual;
+    filter.confidence_threshold_1 = 0.5f;
     filter.min_width_1 = 5;
     filter.min_height_1 = 6;
     filter.min_area_1 = 30;
+    filter.confidence_threshold_2 = 0.7f;
     filter.min_width_2 = 10;
     filter.min_height_2 = 12;
     filter.min_area_2 = 60;
@@ -804,10 +810,16 @@ int TestTieredYoloContrastAndSizeFiltering() {
     if (AssertTrue(output.details.empty(),
                    "middle contrast band should also use area group 1")) return 1;
     yolo.details[0].area = 30;
+    yolo.details[0].score = 0.49f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "middle contrast band should use confidence threshold 1")) return 1;
+    yolo.details[0].score = 0.5f;
     compose();
     if (AssertTrue(output.details.size() == 1,
                    "middle contrast band should include all group 1 boundaries")) return 1;
     yolo.details[0].contrast = 0.95f;
+    yolo.details[0].score = 0.9f;
     compose();
     if (AssertTrue(output.details.empty(),
                    "contrast above threshold 2 should use size group 2")) return 1;
@@ -817,6 +829,11 @@ int TestTieredYoloContrastAndSizeFiltering() {
     if (AssertTrue(output.details.empty(),
                    "high contrast band should also use area group 2")) return 1;
     yolo.details[0].area = 60;
+    yolo.details[0].score = 0.69f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "high contrast band should use confidence threshold 2")) return 1;
+    yolo.details[0].score = 0.7f;
     compose();
     if (AssertTrue(output.details.size() == 1,
                    "high contrast band should include all group 2 boundaries")) return 1;
@@ -830,9 +847,11 @@ int TestTieredYoloContrastAndSizeFiltering() {
     bright_filter.contrast_threshold_1 = 1.1f;
     bright_filter.contrast_threshold_2 = 1.2f;
     bright_filter.contrast_direction = InspectionConfig::ContrastFilterDirection::GreaterEqual;
+    bright_filter.confidence_threshold_1 = 0.5f;
     bright_filter.min_width_1 = 5;
     bright_filter.min_height_1 = 6;
     bright_filter.min_area_1 = 30;
+    bright_filter.confidence_threshold_2 = 0.7f;
     bright_filter.min_width_2 = 10;
     bright_filter.min_height_2 = 12;
     bright_filter.min_area_2 = 60;
@@ -850,6 +869,20 @@ int TestTieredYoloContrastAndSizeFiltering() {
     compose();
     if (AssertTrue(output.details.size() == 1,
                    "bright-polarity low band should use size group 2")) return 1;
+
+    bright_filter.contrast_threshold_1 = 0.0f;
+    bright_filter.contrast_threshold_2 = 0.0f;
+    bright_filter.confidence_threshold_1 = 0.99f;
+    bright_filter.confidence_threshold_2 = 0.99f;
+    bright_filter.confidence_threshold = 0.8f;
+    yolo.details[0].score = 0.79f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "base confidence threshold should remain active when tiering is disabled")) return 1;
+    yolo.details[0].score = 0.8f;
+    compose();
+    if (AssertTrue(output.details.size() == 1,
+                   "tier confidence thresholds should be ignored when tiering is disabled")) return 1;
     return 0;
 }
 

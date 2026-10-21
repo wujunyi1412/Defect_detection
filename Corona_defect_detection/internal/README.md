@@ -90,7 +90,7 @@ inference_dll.cpp (主控)
 - 两者都有 → 合并输出
 
 #### `ComposeOutputWithDefectFilter`（完整模式，带类别过滤）
-1. **YOLO 过滤**：通过“类别名 → `CategoryFilterConfig`”映射逐类别过滤；`traditional_measure_mode=dark` 调用暗缺陷细化，`traditional_measure_mode=bright` 调用亮缺陷细化，`none` 关闭细化。两种细化当前都只处理宽、高不超过 30 像素的检测框。启用 `contrast_threshold_1/2` 后按对比度分为直接保留区、第 1 组宽高面积过滤区和第 2 组宽高面积过滤区；`contrast_direction` 控制暗缺陷（`less_equal`）或亮缺陷（`greater_equal`）方向
+1. **YOLO 过滤**：通过“类别名 → `CategoryFilterConfig`”映射逐类别过滤；原有 `confidence_threshold` 始终先执行。`traditional_measure_mode=dark` 调用暗缺陷细化，`traditional_measure_mode=bright` 调用亮缺陷细化，`none` 关闭细化。启用 `contrast_threshold_1/2` 后按对比度分为直接保留区、第 1 组附加置信度/宽高面积过滤区和第 2 组附加置信度/宽高面积过滤区；`contrast_direction` 控制暗缺陷（`less_equal`）或亮缺陷（`greater_equal`）方向
 2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤。PatchCore `contrast_threshold > 0` 时保留 `contrast >= threshold`，配置为 `0` 时关闭对比度过滤
 3. **AA 后过滤**：标准 YOLO 过滤后，`aa_yolo_filter` 包含两条独立规则：“中心 Y +（最小宽高比或最大宽度）”和“左上角 X/Y + 宽/高范围”。第一条规则中 `max_width=0` 可关闭宽度条件；两条规则分别由 `[AA]` 开关控制，任一启用规则命中就移除该 YOLO 结果
 4. **PatchCore/YOLO IoU 过滤**：对每条已通过过滤的 PatchCore `Abnormal`，计算它与全部最终 YOLO 框的 IoU；任一 IoU 严格大于 `post.patchcore_yolo_iou_threshold` 时移除该 PatchCore 明细。没有 YOLO 时始终保留，阈值设为 `1` 可关闭此过滤

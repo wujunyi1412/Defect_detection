@@ -21,8 +21,13 @@ bool PassContrastThreshold(float contrast, float threshold, bool keep_below_thre
 }
 
 bool PassMinimumGeometry(
-    const DetectionResult& detail, int min_width, int min_height, int min_area) {
-    return (min_width <= 0 || detail.w >= static_cast<float>(min_width)) &&
+    const DetectionResult& detail,
+    float confidence_threshold,
+    int min_width,
+    int min_height,
+    int min_area) {
+    return detail.score >= confidence_threshold &&
+           (min_width <= 0 || detail.w >= static_cast<float>(min_width)) &&
            (min_height <= 0 || detail.h >= static_cast<float>(min_height)) &&
            (min_area <= 0 || detail.area >= min_area);
 }
@@ -41,17 +46,20 @@ bool PassTieredContrastAndSize(
         if (detail.contrast <= filter.contrast_threshold_1) return true;
         if (detail.contrast <= filter.contrast_threshold_2) {
             return PassMinimumGeometry(
-                detail, filter.min_width_1, filter.min_height_1, filter.min_area_1);
+                detail, filter.confidence_threshold_1,
+                filter.min_width_1, filter.min_height_1, filter.min_area_1);
         }
     } else {
         if (detail.contrast >= filter.contrast_threshold_2) return true;
         if (detail.contrast >= filter.contrast_threshold_1) {
             return PassMinimumGeometry(
-                detail, filter.min_width_1, filter.min_height_1, filter.min_area_1);
+                detail, filter.confidence_threshold_1,
+                filter.min_width_1, filter.min_height_1, filter.min_area_1);
         }
     }
     return PassMinimumGeometry(
-        detail, filter.min_width_2, filter.min_height_2, filter.min_area_2);
+        detail, filter.confidence_threshold_2,
+        filter.min_width_2, filter.min_height_2, filter.min_area_2);
 }
 
 }  // namespace
@@ -171,7 +179,8 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
                     detail.contrast,
                     cf->contrast_threshold,
                     category->keep_contrast_below_threshold)) continue;
-            if (!PassMinimumGeometry(detail, cf->min_width, cf->min_height, cf->min_area)) continue;
+            if (!PassMinimumGeometry(
+                    detail, 0.0f, cf->min_width, cf->min_height, cf->min_area)) continue;
         }
         yolo_details_filtered.push_back(detail);
     }

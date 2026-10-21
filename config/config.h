@@ -27,9 +27,11 @@ struct CategoryFilterConfig {
     float contrast_threshold_1 = 0.0f;
     float contrast_threshold_2 = 0.0f;
     ContrastFilterDirection contrast_direction = ContrastFilterDirection::LessEqual;
+    float confidence_threshold_1 = 0.0f;
     int min_width_1 = 0;
     int min_height_1 = 0;
     int min_area_1 = 0;
+    float confidence_threshold_2 = 0.0f;
     int min_width_2 = 0;
     int min_height_2 = 0;
     int min_area_2 = 0;

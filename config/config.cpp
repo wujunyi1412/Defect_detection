@@ -123,9 +123,13 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
     filter.min_area = GetIntOr(ini, section, "min_area", 0);
     filter.contrast_threshold_1 = GetFloatOr(ini, section, "contrast_threshold_1", 0.0f);
     filter.contrast_threshold_2 = GetFloatOr(ini, section, "contrast_threshold_2", 0.0f);
+    filter.confidence_threshold_1 = GetFloatOr(
+        ini, section, "confidence_threshold_1", 0.0f);
     filter.min_width_1 = GetIntOr(ini, section, "min_width_1", filter.min_width);
     filter.min_height_1 = GetIntOr(ini, section, "min_height_1", filter.min_height);
     filter.min_area_1 = GetIntOr(ini, section, "min_area_1", filter.min_area);
+    filter.confidence_threshold_2 = GetFloatOr(
+        ini, section, "confidence_threshold_2", 0.0f);
     filter.min_width_2 = GetIntOr(ini, section, "min_width_2", filter.min_width);
     filter.min_height_2 = GetIntOr(ini, section, "min_height_2", filter.min_height);
     filter.min_area_2 = GetIntOr(ini, section, "min_area_2", filter.min_area);
@@ -259,7 +263,11 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         if (!ValidateNonNegative(filter.contrast_threshold_1,
                                  (prefix + "contrast_threshold_1").c_str(), err) ||
             !ValidateNonNegative(filter.contrast_threshold_2,
-                                 (prefix + "contrast_threshold_2").c_str(), err)) {
+                                 (prefix + "contrast_threshold_2").c_str(), err) ||
+            !ValidateNonNegative(filter.confidence_threshold_1,
+                                 (prefix + "confidence_threshold_1").c_str(), err) ||
+            !ValidateNonNegative(filter.confidence_threshold_2,
+                                 (prefix + "confidence_threshold_2").c_str(), err)) {
             return false;
         }
         if (filter.contrast_threshold_1 > filter.contrast_threshold_2) {

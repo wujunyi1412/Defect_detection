@@ -15,7 +15,7 @@ YOLO 检测结果
   ↓
 confidence_threshold
   ↓
-分段对比度及对应组的宽、高、面积
+分段对比度及对应组的附加置信度、宽、高、面积
   ↓
 AA / IQT 等附加过滤
   ↓
@@ -56,7 +56,7 @@ contrast_threshold_1=0
 contrast_threshold_2=0
 ```
 
-关闭后，`min_width_1/2`、`min_height_1/2` 和 `min_area_1/2` 全部被忽略。
+关闭后，新增的 `confidence_threshold_1/2`、`min_width_1/2`、`min_height_1/2` 和 `min_area_1/2` 全部被忽略。原有的统一 `confidence_threshold` 始终保留并继续生效。
 
 如果配置文件中还保留旧版字段，则代码会回到旧版过滤逻辑。要完全关闭新旧过滤，旧字段也应删除或设为 `0`：
 
@@ -79,18 +79,19 @@ contrast_direction=less_equal
 
 ```text
 contrast <= contrast_threshold_1
-    → 直接保留，不检查宽、高、面积
+    → 直接保留，不检查附加置信度、宽、高、面积
 
 contrast_threshold_1 < contrast <= contrast_threshold_2
-    → 检查第 1 组宽、高、面积
+    → 检查第 1 组附加置信度、宽、高、面积
 
 contrast > contrast_threshold_2
-    → 检查第 2 组宽、高、面积
+    → 检查第 2 组附加置信度、宽、高、面积
 ```
 
 第 1 组必须同时满足：
 
 ```text
+score  >= confidence_threshold_1
 width  >= min_width_1
 height >= min_height_1
 area   >= min_area_1
@@ -99,6 +100,7 @@ area   >= min_area_1
 第 2 组必须同时满足：
 
 ```text
+score  >= confidence_threshold_2
 width  >= min_width_2
 height >= min_height_2
 area   >= min_area_2
@@ -111,10 +113,12 @@ contrast_threshold_1=0.80
 contrast_threshold_2=0.90
 contrast_direction=less_equal
 
+confidence_threshold_1=0.50
 min_width_1=5
 min_height_1=6
 min_area_1=20
 
+confidence_threshold_2=0.70
 min_width_2=10
 min_height_2=12
 min_area_2=50
@@ -123,8 +127,8 @@ min_area_2=50
 | 对比度 | 处理方式 |
 |---:|---|
 | `contrast <= 0.80` | 直接保留 |
-| `0.80 < contrast <= 0.90` | 宽 ≥ 5、高 ≥ 6、面积 ≥ 20 |
-| `contrast > 0.90` | 宽 ≥ 10、高 ≥ 12、面积 ≥ 50 |
+| `0.80 < contrast <= 0.90` | 置信度 ≥ 0.50、宽 ≥ 5、高 ≥ 6、面积 ≥ 20 |
+| `contrast > 0.90` | 置信度 ≥ 0.70、宽 ≥ 10、高 ≥ 12、面积 ≥ 50 |
 
 ## 5. 亮缺陷方向
 
@@ -138,20 +142,21 @@ contrast_direction=greater_equal
 
 ```text
 contrast >= contrast_threshold_2
-    → 直接保留，不检查宽、高、面积
+    → 直接保留，不检查附加置信度、宽、高、面积
 
 contrast_threshold_1 <= contrast < contrast_threshold_2
-    → 检查第 1 组宽、高、面积
+    → 检查第 1 组附加置信度、宽、高、面积
 
 contrast < contrast_threshold_1
-    → 检查第 2 组宽、高、面积
+    → 检查第 2 组附加置信度、宽、高、面积
 ```
 
-## 6. 两组几何阈值之间的关系
+## 6. 两组附加阈值之间的关系
 
-当前代码只要求所有宽、高、面积阈值不小于 `0`，没有强制两组之间的大小关系：
+当前代码只要求所有附加置信度、宽、高、面积阈值不小于 `0`，没有强制两组之间的大小关系：
 
 ```text
+confidence_threshold_1 与 confidence_threshold_2 之间没有强制大小关系
 min_width_1  与 min_width_2 之间没有强制大小关系
 min_height_1 与 min_height_2 之间没有强制大小关系
 min_area_1   与 min_area_2   之间没有强制大小关系
@@ -167,12 +172,13 @@ min_area_1   与 min_area_2   之间没有强制大小关系
 通常弱极性区需要更严格的尺寸要求，因此业务配置一般建议：
 
 ```text
+confidence_threshold_2 >= confidence_threshold_1
 min_width_2  >= min_width_1
 min_height_2 >= min_height_1
 min_area_2   >= min_area_1
 ```
 
-这只是推荐关系，目前不是代码的强制校验条件。每一组内部的宽、高、面积是“并且”关系，三个条件全部通过才保留。
+这只是推荐关系，目前不是代码的强制校验条件。每一组内部的附加置信度、宽、高、面积是“并且”关系，四个条件全部通过才保留。
 
 单个参数设为 `0` 表示不检查该项。例如：
 
@@ -183,6 +189,17 @@ min_area_1=20
 ```
 
 表示第 1 组只检查宽度和面积，不限制高度。
+
+`confidence_threshold_1=0` 或 `confidence_threshold_2=0` 表示对应组不增加额外置信度限制，但最前面的统一 `confidence_threshold` 仍然生效。
+
+因为统一置信度先执行，所以某一分组实际生效的置信度下限等价于：
+
+```text
+第 1 组：max(confidence_threshold, confidence_threshold_1)
+第 2 组：max(confidence_threshold, confidence_threshold_2)
+```
+
+新增的两个阈值不会覆盖或降低原有统一置信度阈值。
 
 ## 7. 强制配置约束
 
