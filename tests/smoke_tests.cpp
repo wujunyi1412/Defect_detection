@@ -468,6 +468,15 @@ int TestAaConfigParsing() {
                << "BrightStripes=BrightLine\n"
                << "[Stain_config]\n"
                << "traditional_measure_mode=dark\n"
+               << "contrast_threshold_1=0.8\n"
+               << "contrast_threshold_2=0.9\n"
+               << "contrast_direction=less_equal\n"
+               << "min_width_1=5\n"
+               << "min_height_1=6\n"
+               << "min_area_1=30\n"
+               << "min_width_2=10\n"
+               << "min_height_2=12\n"
+               << "min_area_2=60\n"
                << "[BrightStripes_config]\n"
                << "traditional_measure_mode=bright\n"
                << "[Decolorization_config]\n"
@@ -534,6 +543,16 @@ int TestAaConfigParsing() {
     if (AssertTrue(config.category_filters.at("Stain").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::Dark,
                     "Stain dark refinement should be configuration-driven")) return 1;
+    const auto& stain_filter = config.category_filters.at("Stain");
+    if (AssertTrue(stain_filter.contrast_threshold_1 == 0.8f &&
+                       stain_filter.contrast_threshold_2 == 0.9f &&
+                       stain_filter.contrast_direction ==
+                           InspectionConfig::ContrastFilterDirection::LessEqual &&
+                       stain_filter.min_width_1 == 5 && stain_filter.min_height_1 == 6 &&
+                       stain_filter.min_area_1 == 30 &&
+                       stain_filter.min_width_2 == 10 && stain_filter.min_height_2 == 12 &&
+                       stain_filter.min_area_2 == 60,
+                   "tiered YOLO contrast and geometry settings should be parsed")) return 1;
     if (AssertTrue(config.category_filters.at("BrightStripes").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::Bright,
                     "bright refinement should be configuration-driven")) return 1;
@@ -740,6 +759,100 @@ int TestContrastThresholdUsesCategoryDirection() {
     return 0;
 }
 
+int TestTieredYoloContrastAndSizeFiltering() {
+    InspectionDLL::DetectionResult detail;
+    detail.name = "Stain";
+    detail.score = 0.9f;
+    detail.contrast = 0.8f;
+    detail.area = 25;
+    detail.w = 2.0f;
+    detail.h = 2.0f;
+
+    InspectionDLL::Internal::YoloDerived yolo;
+    yolo.has_detections = true;
+    yolo.details.push_back(detail);
+    InspectionDLL::Internal::PatchCoreDerived patchcore;
+    InspectionDLL::Internal::ResultComposeContext context;
+    auto& filter = context.category_filters["Stain"];
+    filter.contrast_threshold_1 = 0.8f;
+    filter.contrast_threshold_2 = 0.9f;
+    filter.contrast_direction = InspectionConfig::ContrastFilterDirection::LessEqual;
+    filter.min_width_1 = 5;
+    filter.min_height_1 = 6;
+    filter.min_area_1 = 30;
+    filter.min_width_2 = 10;
+    filter.min_height_2 = 12;
+    filter.min_area_2 = 60;
+
+    InspectionDLL::InferenceResult output;
+    const cv::Mat gray(32, 32, CV_8U, cv::Scalar(128));
+    auto compose = [&]() {
+        InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+            patchcore, yolo, gray.size(), gray, gray, output, context);
+    };
+
+    compose();
+    if (AssertTrue(output.details.size() == 1,
+                   "contrast <= threshold 1 should bypass size filtering")) return 1;
+    yolo.details[0].contrast = 0.9f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "middle contrast band should use size group 1")) return 1;
+    yolo.details[0].w = 5.0f;
+    yolo.details[0].h = 6.0f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "middle contrast band should also use area group 1")) return 1;
+    yolo.details[0].area = 30;
+    compose();
+    if (AssertTrue(output.details.size() == 1,
+                   "middle contrast band should include all group 1 boundaries")) return 1;
+    yolo.details[0].contrast = 0.95f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "contrast above threshold 2 should use size group 2")) return 1;
+    yolo.details[0].w = 10.0f;
+    yolo.details[0].h = 12.0f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "high contrast band should also use area group 2")) return 1;
+    yolo.details[0].area = 60;
+    compose();
+    if (AssertTrue(output.details.size() == 1,
+                   "high contrast band should include all group 2 boundaries")) return 1;
+
+    detail.name = "BrightStripes";
+    detail.contrast = 1.2f;
+    detail.w = 2.0f;
+    detail.h = 2.0f;
+    yolo.details[0] = detail;
+    auto& bright_filter = context.category_filters["BrightStripes"];
+    bright_filter.contrast_threshold_1 = 1.1f;
+    bright_filter.contrast_threshold_2 = 1.2f;
+    bright_filter.contrast_direction = InspectionConfig::ContrastFilterDirection::GreaterEqual;
+    bright_filter.min_width_1 = 5;
+    bright_filter.min_height_1 = 6;
+    bright_filter.min_area_1 = 30;
+    bright_filter.min_width_2 = 10;
+    bright_filter.min_height_2 = 12;
+    bright_filter.min_area_2 = 60;
+    compose();
+    if (AssertTrue(output.details.size() == 1,
+                   "bright-polarity contrast >= threshold 2 should bypass size filtering")) return 1;
+    yolo.details[0].contrast = 1.1f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "bright-polarity middle band should use size group 1")) return 1;
+    yolo.details[0].contrast = 1.0f;
+    yolo.details[0].w = 10.0f;
+    yolo.details[0].h = 12.0f;
+    yolo.details[0].area = 60;
+    compose();
+    if (AssertTrue(output.details.size() == 1,
+                   "bright-polarity low band should use size group 2")) return 1;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -752,6 +865,7 @@ int main() {
     if (TestAaConfigParsing()) return 1;
     if (TestResultCategoryMapping()) return 1;
     if (TestContrastThresholdUsesCategoryDirection()) return 1;
+    if (TestTieredYoloContrastAndSizeFiltering()) return 1;
     if (TestPatchCoreAnyYoloIouFiltering()) return 1;
     if (TestAllYoloClassMappingsAndPolarities()) return 1;
     if (TestYoloPostprocessReusesBinaryMask()) return 1;

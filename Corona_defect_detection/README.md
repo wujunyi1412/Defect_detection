@@ -134,7 +134,9 @@ Corona_defect_detection/
 [Lineartifacts_config]
 ```
 
-每个类别过滤器包含：`Enable`、`confidence_threshold`、`contrast_threshold`、`min_width/height/area` 和 `traditional_measure_mode`。细化模式支持 `none`（关闭）、`dark`（暗缺陷）和 `bright`（亮缺陷）；当前 Stain 配置为 `dark`，亮缺陷类别可按需配置为 `bright`。旧配置 `use_traditional_measure=1` 仍兼容，并按暗缺陷处理。
+每个类别过滤器包含：`Enable`、`confidence_threshold`、两级 `contrast_threshold_1/2`、`contrast_direction`、两组 `min_width/min_height/min_area` 和 `traditional_measure_mode`。`less_equal` 用于暗缺陷，`greater_equal` 用于亮缺陷；强极性区直接保留，中间区和弱极性区分别检查第 1、2 组宽、高、面积。两个对比度阈值均为 0 时关闭整套分段过滤。旧版 `contrast_threshold/min_width/min_height/min_area` 和 `use_traditional_measure=1` 配置仍兼容。
+
+完整的区间边界、关闭方式和两组参数关系见 [`YOLO_TIERED_FILTER_LOGIC.md`](YOLO_TIERED_FILTER_LOGIC.md)。
 
 ### 6. internal/ — 后处理模块
 

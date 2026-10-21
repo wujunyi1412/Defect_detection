@@ -121,6 +121,23 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
     filter.min_width = GetIntOr(ini, section, "min_width", 0);
     filter.min_height = GetIntOr(ini, section, "min_height", 0);
     filter.min_area = GetIntOr(ini, section, "min_area", 0);
+    filter.contrast_threshold_1 = GetFloatOr(ini, section, "contrast_threshold_1", 0.0f);
+    filter.contrast_threshold_2 = GetFloatOr(ini, section, "contrast_threshold_2", 0.0f);
+    filter.min_width_1 = GetIntOr(ini, section, "min_width_1", filter.min_width);
+    filter.min_height_1 = GetIntOr(ini, section, "min_height_1", filter.min_height);
+    filter.min_area_1 = GetIntOr(ini, section, "min_area_1", filter.min_area);
+    filter.min_width_2 = GetIntOr(ini, section, "min_width_2", filter.min_width);
+    filter.min_height_2 = GetIntOr(ini, section, "min_height_2", filter.min_height);
+    filter.min_area_2 = GetIntOr(ini, section, "min_area_2", filter.min_area);
+    const std::string direction = ToLowerCopy(TrimCopy(
+        GetStringOr(ini, section, "contrast_direction", "less_equal")));
+    if (direction == "less_equal" || direction == "less" || direction == "below") {
+        filter.contrast_direction = ContrastFilterDirection::LessEqual;
+    } else if (direction == "greater_equal" || direction == "greater" || direction == "above") {
+        filter.contrast_direction = ContrastFilterDirection::GreaterEqual;
+    } else {
+        filter.contrast_direction = ContrastFilterDirection::Invalid;
+    }
     std::string configured_mode;
     if (TryGetString(ini, section, "traditional_measure_mode", configured_mode)) {
         const std::string mode = ToLowerCopy(TrimCopy(configured_mode));
@@ -231,6 +248,29 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
     if (out.defect_mask_alpha < 0.0f || out.defect_mask_alpha > 1.0f) {
         err = "post.defect_mask_alpha must be in [0, 1]";
         return false;
+    }
+
+    for (const auto& [category, filter] : out.category_filters) {
+        const std::string prefix = category + ".";
+        if (filter.contrast_direction == ContrastFilterDirection::Invalid) {
+            err = prefix + "contrast_direction must be less_equal or greater_equal";
+            return false;
+        }
+        if (!ValidateNonNegative(filter.contrast_threshold_1,
+                                 (prefix + "contrast_threshold_1").c_str(), err) ||
+            !ValidateNonNegative(filter.contrast_threshold_2,
+                                 (prefix + "contrast_threshold_2").c_str(), err)) {
+            return false;
+        }
+        if (filter.contrast_threshold_1 > filter.contrast_threshold_2) {
+            err = prefix + "contrast_threshold_2 must be >= contrast_threshold_1";
+            return false;
+        }
+        if (filter.min_width_1 < 0 || filter.min_height_1 < 0 || filter.min_area_1 < 0 ||
+            filter.min_width_2 < 0 || filter.min_height_2 < 0 || filter.min_area_2 < 0) {
+            err = prefix + "group width/height/area thresholds must be >= 0";
+            return false;
+        }
     }
 
     if (out.aa_filter.enable) {

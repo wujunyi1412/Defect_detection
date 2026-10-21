@@ -12,12 +12,27 @@ enum class TraditionalMeasureMode {
     Bright,
 };
 
+enum class ContrastFilterDirection {
+    LessEqual,
+    GreaterEqual,
+    Invalid,
+};
+
 struct CategoryFilterConfig {
     bool enable = true;
     float confidence_threshold = 0.0f;
     float contrast_threshold = 0.0f;
     int min_width = 0;
     int min_height = 0;
+    float contrast_threshold_1 = 0.0f;
+    float contrast_threshold_2 = 0.0f;
+    ContrastFilterDirection contrast_direction = ContrastFilterDirection::LessEqual;
+    int min_width_1 = 0;
+    int min_height_1 = 0;
+    int min_area_1 = 0;
+    int min_width_2 = 0;
+    int min_height_2 = 0;
+    int min_area_2 = 0;
     int min_area = 0;
     TraditionalMeasureMode traditional_measure_mode = TraditionalMeasureMode::None;
 };

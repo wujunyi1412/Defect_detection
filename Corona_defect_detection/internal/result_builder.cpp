@@ -20,6 +20,40 @@ bool PassContrastThreshold(float contrast, float threshold, bool keep_below_thre
     return keep_below_threshold ? contrast < threshold : contrast >= threshold;
 }
 
+bool PassMinimumGeometry(
+    const DetectionResult& detail, int min_width, int min_height, int min_area) {
+    return (min_width <= 0 || detail.w >= static_cast<float>(min_width)) &&
+           (min_height <= 0 || detail.h >= static_cast<float>(min_height)) &&
+           (min_area <= 0 || detail.area >= min_area);
+}
+
+bool UsesTieredContrastFilter(const InspectionConfig::CategoryFilterConfig& filter) {
+    return filter.contrast_threshold_1 > 0.0f || filter.contrast_threshold_2 > 0.0f;
+}
+
+bool PassTieredContrastAndSize(
+    const DetectionResult& detail,
+    const InspectionConfig::CategoryFilterConfig& filter) {
+    if (!UsesTieredContrastFilter(filter)) return true;
+    if (!IsContrastRatioValid(detail.contrast)) return false;
+
+    if (filter.contrast_direction == InspectionConfig::ContrastFilterDirection::LessEqual) {
+        if (detail.contrast <= filter.contrast_threshold_1) return true;
+        if (detail.contrast <= filter.contrast_threshold_2) {
+            return PassMinimumGeometry(
+                detail, filter.min_width_1, filter.min_height_1, filter.min_area_1);
+        }
+    } else {
+        if (detail.contrast >= filter.contrast_threshold_2) return true;
+        if (detail.contrast >= filter.contrast_threshold_1) {
+            return PassMinimumGeometry(
+                detail, filter.min_width_1, filter.min_height_1, filter.min_area_1);
+        }
+    }
+    return PassMinimumGeometry(
+        detail, filter.min_width_2, filter.min_height_2, filter.min_area_2);
+}
+
 }  // namespace
 
 void ComposeOutput(const PatchCoreDerived& pc,
@@ -130,13 +164,15 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         }
         if (!cf->enable) continue;
         if (detail.score < cf->confidence_threshold) continue;
-        if (!PassContrastThreshold(
-                detail.contrast,
-                cf->contrast_threshold,
-                category->keep_contrast_below_threshold)) continue;
-        if (cf->min_width > 0 && detail.w < static_cast<float>(cf->min_width)) continue;
-        if (cf->min_height > 0 && detail.h < static_cast<float>(cf->min_height)) continue;
-        if (cf->min_area > 0 && detail.area < cf->min_area) continue;
+        if (UsesTieredContrastFilter(*cf)) {
+            if (!PassTieredContrastAndSize(detail, *cf)) continue;
+        } else {
+            if (!PassContrastThreshold(
+                    detail.contrast,
+                    cf->contrast_threshold,
+                    category->keep_contrast_below_threshold)) continue;
+            if (!PassMinimumGeometry(detail, cf->min_width, cf->min_height, cf->min_area)) continue;
+        }
         yolo_details_filtered.push_back(detail);
     }
     std::vector<DetectionResult> pc_details_filtered;

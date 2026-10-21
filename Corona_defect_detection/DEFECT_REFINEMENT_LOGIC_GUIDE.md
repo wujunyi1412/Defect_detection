@@ -74,7 +74,7 @@ internal/result_builder.cpp
 ComposeOutputWithDefectFilter()
 ```
 
-细化发生在阈值过滤之前，因此 `contrast_threshold`、`min_width`、`min_height` 和 `min_area` 使用的是细化后的数据。
+细化发生在阈值过滤之前，因此分段对比度阈值以及两组宽、高、面积阈值使用的是细化后的数据。
 
 ## 4. 细化的前置条件
 
@@ -427,27 +427,31 @@ DetectionResult detail = d;
 ```text
 Enable
 confidence_threshold
-contrast_threshold
-min_width
-min_height
-min_area
+contrast_threshold_1 / contrast_threshold_2
+contrast_direction
+min_width_1 / min_height_1 / min_area_1
+min_width_2 / min_height_2 / min_area_2
 ```
 
 其中置信度仍然是 YOLO 置信度；对比度、宽高和面积可能已经是细化后的值。
 
-暗缺陷类别通常保留：
+`contrast_direction=less_equal` 用于暗缺陷：
 
 ```text
-contrast < contrast_threshold
+contrast <= threshold_1              → 直接保留
+threshold_1 < contrast <= threshold_2 → 检查第 1 组宽、高、面积
+contrast > threshold_2               → 检查第 2 组宽、高、面积
 ```
 
-亮缺陷类别通常保留：
+`contrast_direction=greater_equal` 用于亮缺陷：
 
 ```text
-contrast >= contrast_threshold
+contrast >= threshold_2              → 直接保留
+threshold_1 <= contrast < threshold_2 → 检查第 1 组宽、高、面积
+contrast < threshold_1               → 检查第 2 组宽、高、面积
 ```
 
-当 `contrast_threshold <= 0` 时关闭对比度过滤。
+当两个新阈值均为 `0` 时关闭分段过滤。旧配置项 `contrast_threshold`、`min_width`、`min_height`、`min_area` 仍然兼容；仅在新分段阈值未启用时走旧过滤逻辑。若要完全关闭新旧过滤，所有这些新旧阈值都应设为 `0` 或删除旧字段。
 
 细化模式与类别的对比度极性应保持一致。例如给暗缺陷类别配置 `bright`，细化算法会寻找亮区域，但后续仍可能按暗缺陷方向过滤，造成不符合预期的结果。
 
@@ -537,77 +541,51 @@ std::isfinite(contrast_ratio) && contrast_ratio >= 0.0f
 - 自动将对比度转换为倒数；
 - 仅因为跨过 1 就立即删除结果。
 
-类别始终保持 YOLO 输出的类别，最终是否保留主要由 `contrast_threshold` 决定。
+类别始终保持 YOLO 输出的类别，最终是否保留主要由分段对比度及其对应的宽高阈值决定。
 
 ### 11.3 对比度阈值的实际过滤规则
 
-过滤逻辑为：
-
-```cpp
-if (threshold <= 0.0f) return true;
-if (!IsContrastRatioValid(contrast)) return false;
-return keep_below_threshold
-           ? contrast < threshold
-           : contrast >= threshold;
-```
-
-暗缺陷类别一般使用：
-
-```text
-contrast < contrast_threshold
-```
-
-例如：
+暗缺陷示例：
 
 ```ini
 [Stain_config]
-contrast_threshold=0.8
+contrast_threshold_1=0.8
+contrast_threshold_2=0.9
+contrast_direction=less_equal
+min_width_1=5
+min_height_1=5
+min_area_1=20
+min_width_2=10
+min_height_2=10
+min_area_2=50
 ```
 
-| 计算对比度 | 处理结果 |
-|---:|---|
-| 0.60 | 保留 |
-| 0.79 | 保留 |
-| 0.80 | 删除 |
-| 1.12 | 删除 |
+此时 `contrast <= 0.8` 直接保留；`0.8 < contrast <= 0.9` 要求宽高均不小于 `5` 且面积不小于 `20`；`contrast > 0.9` 要求宽高均不小于 `10` 且面积不小于 `50`。
 
-因此，当暗缺陷阈值设置为合理的、低于 1 的数值时，暗缺陷计算出大于 1 的结果通常会自然被过滤。
-
-亮缺陷类别一般使用：
-
-```text
-contrast >= contrast_threshold
-```
-
-例如：
+亮缺陷使用镜像方向，例如：
 
 ```ini
 [BrightStripes_config]
-contrast_threshold=1.2
+contrast_threshold_1=1.1
+contrast_threshold_2=1.2
+contrast_direction=greater_equal
+min_width_1=5
+min_height_1=5
+min_area_1=20
+min_width_2=10
+min_height_2=10
+min_area_2=50
 ```
 
-| 计算对比度 | 处理结果 |
-|---:|---|
-| 0.70 | 删除 |
-| 1.00 | 删除 |
-| 1.19 | 删除 |
-| 1.20 | 保留 |
-| 1.50 | 保留 |
+此时 `contrast >= 1.2` 直接保留，`1.1 <= contrast < 1.2` 检查第 1 组宽高面积，`contrast < 1.1` 检查第 2 组宽高面积。
 
-因此，当亮缺陷阈值设置为合理的、大于 1 的数值时，亮缺陷计算出小于 1 的结果通常会自然被过滤。
-
-### 11.4 `contrast_threshold=0` 时不检查冲突
-
-当前代码优先判断：
-
-```cpp
-if (threshold <= 0.0f) return true;
-```
+### 11.4 两个分段阈值均为 0 时不检查冲突
 
 因此：
 
 ```ini
-contrast_threshold=0
+contrast_threshold_1=0
+contrast_threshold_2=0
 ```
 
 表示完全关闭对比度过滤。
@@ -621,7 +599,7 @@ BrightStripes（Bright）得到 contrast=0.70
 
 只要置信度、宽高和面积等其他条件通过，结果仍然会被保留。
 
-还需要注意：如果对比度计算失败并得到 `NaN`，当 `contrast_threshold=0` 时也会直接通过，因为关闭阈值的判断发生在对比度有效性判断之前。当 `contrast_threshold>0` 时，`NaN` 才会被过滤。
+还需要注意：如果对比度计算失败并得到 `NaN`，当两个分段阈值均为 `0` 时会直接通过分段对比度判断；启用任一分段阈值后，`NaN` 会被过滤。
 
 ### 11.5 细化过程中的极性冲突
 
@@ -667,7 +645,7 @@ seed_threshold = max(2.0, 2.5 × noise_sigma)
 
 1. `internal/yolo_categories.h` 中的 `ContrastPolarity`：决定初始对比度计算使用暗、亮还是自动极性；
 2. `traditional_measure_mode`：决定细化时寻找暗区域还是亮区域；
-3. `keep_contrast_below_threshold`：决定后续过滤保留小于阈值还是大于等于阈值的结果。
+3. `contrast_direction`：决定分段过滤采用暗缺陷方向还是亮缺陷方向。旧版单阈值配置仍使用类别定义中的 `keep_contrast_below_threshold`。
 
 这三项目前不会自动进行一致性校验。
 
@@ -676,14 +654,14 @@ seed_threshold = max(2.0, 2.5 × noise_sigma)
 ```text
 类别极性：Dark
 细化模式：bright
-过滤方向：contrast < threshold
+过滤方向：less_equal 或 greater_equal
 ```
 
 处理过程仍然会正常执行：
 
 1. 按亮缺陷寻找细化区域；
 2. 按亮缺陷重新计算对比度；
-3. 最后按暗缺陷方向执行 `contrast < threshold`。
+3. 最后按配置的分段方向执行宽高过滤。
 
 这可能导致细化成功但随后被错误方向的阈值过滤，或者保留不符合业务语义的结果。
 
@@ -698,10 +676,10 @@ seed_threshold = max(2.0, 2.5 × noise_sigma)
   ↓
 对比度仍作为有效数值输出
   ↓
-contrast_threshold > 0
-  → 根据类别预设的阈值方向决定保留或删除
+contrast_threshold_1 或 contrast_threshold_2 > 0
+  → 根据 contrast_direction 进入直接保留区或两组宽高过滤区
 
-contrast_threshold <= 0
+contrast_threshold_1 = 0 且 contrast_threshold_2 = 0
   → 不检查极性冲突，直接通过对比度过滤
 ```
 
@@ -730,14 +708,4 @@ if (!polarity_matches) {
 亮缺陷：contrast > 1.02
 ```
 
-也可以继续使用现有 `contrast_threshold` 完成极性约束：
-
-```ini
-[Stain_config]
-contrast_threshold=0.98
-
-[BrightStripes_config]
-contrast_threshold=1.02
-```
-
-使用配置阈值的优点是不同类别可以设置不同边界，不需要在代码中写死统一的极性容差。
+分段配置本身不会无条件删除弱极性区的结果，而是让该区结果接受第 2 组宽高面积检查。如果业务要求不考虑几何尺寸、只按极性硬删除，仍应增加上述显式极性校验；不要通过设置不合理的超大阈值来模拟。
