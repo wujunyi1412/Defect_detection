@@ -1,6 +1,6 @@
 # YOLO 分段过滤逻辑
 
-本文说明当前 YOLO 检测结果的类别过滤顺序，以及两级对比度和两组宽、高、面积参数的实际行为。
+本文说明 YOLO 检测结果的类别过滤顺序，以及两级对比度阈值和三组附加置信度、宽、高、面积参数的实际行为。
 
 ## 1. 总体处理顺序
 
@@ -8,21 +8,15 @@
 
 ```text
 YOLO 检测结果
-  ↓
-传统算法细化（按类别配置，可关闭）
-  ↓
-类别 Enable
-  ↓
-confidence_threshold
-  ↓
-分段对比度及对应组的附加置信度、宽、高、面积
-  ↓
-AA / IQT 等附加过滤
-  ↓
-最终结果
+  → 传统算法细化（按类别配置，可关闭）
+  → 类别 Enable
+  → 统一 confidence_threshold
+  → 分段对比度及对应组的附加置信度、宽、高、面积
+  → AA / IQT 等附加过滤
+  → 最终结果
 ```
 
-当 `traditional_measure_mode=dark` 或 `bright` 且细化成功时，后续过滤使用细化后重新计算的宽、高、面积和对比度。类别和 YOLO 置信度不会被细化修改。
+当 `traditional_measure_mode=dark` 或 `bright` 且细化成功时，分段过滤使用细化后重新计算的宽、高、面积和对比度。类别和 YOLO 置信度不会被细化修改。
 
 ## 2. 基础过滤
 
@@ -37,7 +31,7 @@ score < confidence_threshold
     → 进入分段过滤
 ```
 
-`Enable=False` 表示完全禁用该类别，不等同于只关闭分段过滤。
+统一 `confidence_threshold` 始终先执行。各分段的附加置信度只会进一步提高要求，不会替代或降低统一阈值。
 
 ## 3. 启用或关闭分段过滤
 
@@ -56,18 +50,34 @@ contrast_threshold_1=0
 contrast_threshold_2=0
 ```
 
-关闭后，新增的 `confidence_threshold_1/2`、`min_width_1/2`、`min_height_1/2` 和 `min_area_1/2` 全部被忽略。原有的统一 `confidence_threshold` 始终保留并继续生效。
+关闭后，第 0、1、2 组新增参数全部被忽略，统一 `confidence_threshold` 仍然生效。
 
-如果配置文件中还保留旧版字段，则代码会回到旧版过滤逻辑。要完全关闭新旧过滤，旧字段也应删除或设为 `0`：
+旧版 `contrast_threshold`、`min_width`、`min_height`、`min_area` 仍兼容；只有未启用新分段过滤时才使用它们。要同时关闭新旧过滤，应将这些旧字段删除或设为 `0`。
 
-```ini
-contrast_threshold=0
-min_width=0
-min_height=0
-min_area=0
+## 4. 三组附加参数
+
+每个对比度区间分别对应一组参数：
+
+| 分组 | 对比度含义 | 参数 |
+|---|---|---|
+| 第 0 组 | 强极性区，原来的“直接保留区” | `confidence_threshold_0`、`min_width_0`、`min_height_0`、`min_area_0` |
+| 第 1 组 | 中间区 | `confidence_threshold_1`、`min_width_1`、`min_height_1`、`min_area_1` |
+| 第 2 组 | 弱极性区 | `confidence_threshold_2`、`min_width_2`、`min_height_2`、`min_area_2` |
+
+每组内部必须同时满足：
+
+```text
+score  >= confidence_threshold_N
+width  >= min_width_N
+height >= min_height_N
+area   >= min_area_N
 ```
 
-## 4. 暗缺陷方向
+其中 `N` 为 `0`、`1` 或 `2`。单个参数设为 `0` 表示不检查该项。
+
+为了兼容旧配置，第 0 组参数缺省值均为 `0`。因此旧配置不添加第 0 组参数时，强极性区仍等价于原先的“直接保留”；只有显式配置第 0 组参数后，才会增加对应限制。
+
+## 5. 暗缺陷方向
 
 配置：
 
@@ -75,43 +85,30 @@ min_area=0
 contrast_direction=less_equal
 ```
 
-处理规则：
+区间规则：
 
 ```text
 contrast <= contrast_threshold_1
-    → 直接保留，不检查附加置信度、宽、高、面积
+    → 检查第 0 组
 
 contrast_threshold_1 < contrast <= contrast_threshold_2
-    → 检查第 1 组附加置信度、宽、高、面积
+    → 检查第 1 组
 
 contrast > contrast_threshold_2
-    → 检查第 2 组附加置信度、宽、高、面积
+    → 检查第 2 组
 ```
 
-第 1 组必须同时满足：
-
-```text
-score  >= confidence_threshold_1
-width  >= min_width_1
-height >= min_height_1
-area   >= min_area_1
-```
-
-第 2 组必须同时满足：
-
-```text
-score  >= confidence_threshold_2
-width  >= min_width_2
-height >= min_height_2
-area   >= min_area_2
-```
-
-例如：
+示例：
 
 ```ini
 contrast_threshold_1=0.80
 contrast_threshold_2=0.90
 contrast_direction=less_equal
+
+confidence_threshold_0=0.40
+min_width_0=2
+min_height_0=3
+min_area_0=6
 
 confidence_threshold_1=0.50
 min_width_1=5
@@ -124,13 +121,13 @@ min_height_2=12
 min_area_2=50
 ```
 
-| 对比度 | 处理方式 |
+| 对比度 | 实际要求 |
 |---:|---|
-| `contrast <= 0.80` | 直接保留 |
+| `contrast <= 0.80` | 置信度 ≥ 0.40、宽 ≥ 2、高 ≥ 3、面积 ≥ 6 |
 | `0.80 < contrast <= 0.90` | 置信度 ≥ 0.50、宽 ≥ 5、高 ≥ 6、面积 ≥ 20 |
 | `contrast > 0.90` | 置信度 ≥ 0.70、宽 ≥ 10、高 ≥ 12、面积 ≥ 50 |
 
-## 5. 亮缺陷方向
+## 6. 亮缺陷方向
 
 配置：
 
@@ -138,76 +135,40 @@ min_area_2=50
 contrast_direction=greater_equal
 ```
 
-处理规则：
+区间规则与暗缺陷镜像：
 
 ```text
 contrast >= contrast_threshold_2
-    → 直接保留，不检查附加置信度、宽、高、面积
+    → 检查第 0 组
 
 contrast_threshold_1 <= contrast < contrast_threshold_2
-    → 检查第 1 组附加置信度、宽、高、面积
+    → 检查第 1 组
 
 contrast < contrast_threshold_1
-    → 检查第 2 组附加置信度、宽、高、面积
+    → 检查第 2 组
 ```
 
-## 6. 两组附加阈值之间的关系
+例如阈值为 `1.10` 和 `1.20` 时，`contrast >= 1.20` 使用第 0 组，`1.10 <= contrast < 1.20` 使用第 1 组，`contrast < 1.10` 使用第 2 组。
 
-当前代码只要求所有附加置信度、宽、高、面积阈值不小于 `0`，没有强制两组之间的大小关系：
+## 7. 置信度的实际下限
+
+由于统一置信度先执行，各区间最终生效的置信度下限为：
 
 ```text
-confidence_threshold_1 与 confidence_threshold_2 之间没有强制大小关系
-min_width_1  与 min_width_2 之间没有强制大小关系
-min_height_1 与 min_height_2 之间没有强制大小关系
-min_area_1   与 min_area_2   之间没有强制大小关系
-```
-
-因此，下面两种配置在程序层面都合法：
-
-```text
-第 2 组 > 第 1 组
-第 2 组 < 第 1 组
-```
-
-通常弱极性区需要更严格的尺寸要求，因此业务配置一般建议：
-
-```text
-confidence_threshold_2 >= confidence_threshold_1
-min_width_2  >= min_width_1
-min_height_2 >= min_height_1
-min_area_2   >= min_area_1
-```
-
-这只是推荐关系，目前不是代码的强制校验条件。每一组内部的附加置信度、宽、高、面积是“并且”关系，四个条件全部通过才保留。
-
-单个参数设为 `0` 表示不检查该项。例如：
-
-```ini
-min_width_1=5
-min_height_1=0
-min_area_1=20
-```
-
-表示第 1 组只检查宽度和面积，不限制高度。
-
-`confidence_threshold_1=0` 或 `confidence_threshold_2=0` 表示对应组不增加额外置信度限制，但最前面的统一 `confidence_threshold` 仍然生效。
-
-因为统一置信度先执行，所以某一分组实际生效的置信度下限等价于：
-
-```text
+第 0 组：max(confidence_threshold, confidence_threshold_0)
 第 1 组：max(confidence_threshold, confidence_threshold_1)
 第 2 组：max(confidence_threshold, confidence_threshold_2)
 ```
 
-新增的两个阈值不会覆盖或降低原有统一置信度阈值。
+## 8. 配置约束
 
-## 7. 强制配置约束
-
-当前唯一的组间顺序约束是：
+代码强制要求：
 
 ```text
 contrast_threshold_2 >= contrast_threshold_1
+所有附加置信度、宽、高、面积阈值 >= 0
 ```
 
-如果不满足，配置加载失败。启用分段过滤后，如果计算出的对比度是 `NaN` 或其他无效值，该检测结果会被过滤。
+三组附加阈值之间没有强制大小关系。通常弱极性区需要更严格的要求，可按业务需要配置为第 2 组 ≥ 第 1 组 ≥ 第 0 组，但这只是建议，并非加载条件。
 
+启用分段过滤后，如果对比度为 `NaN` 或其他无效值，该检测结果会被过滤。

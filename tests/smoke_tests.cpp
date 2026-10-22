@@ -471,6 +471,10 @@ int TestAaConfigParsing() {
                << "contrast_threshold_1=0.8\n"
                << "contrast_threshold_2=0.9\n"
                << "contrast_direction=less_equal\n"
+               << "confidence_threshold_0=0.4\n"
+               << "min_width_0=2\n"
+               << "min_height_0=3\n"
+               << "min_area_0=12\n"
                << "confidence_threshold_1=0.5\n"
                << "min_width_1=5\n"
                << "min_height_1=6\n"
@@ -550,6 +554,9 @@ int TestAaConfigParsing() {
                        stain_filter.contrast_threshold_2 == 0.9f &&
                        stain_filter.contrast_direction ==
                            InspectionConfig::ContrastFilterDirection::LessEqual &&
+                       stain_filter.confidence_threshold_0 == 0.4f &&
+                       stain_filter.min_width_0 == 2 && stain_filter.min_height_0 == 3 &&
+                       stain_filter.min_area_0 == 12 &&
                        stain_filter.confidence_threshold_1 == 0.5f &&
                        stain_filter.min_width_1 == 5 && stain_filter.min_height_1 == 6 &&
                        stain_filter.min_area_1 == 30 &&
@@ -814,6 +821,10 @@ int TestTieredYoloContrastAndSizeFiltering() {
     filter.contrast_threshold_1 = 0.8f;
     filter.contrast_threshold_2 = 0.9f;
     filter.contrast_direction = InspectionConfig::ContrastFilterDirection::LessEqual;
+    filter.confidence_threshold_0 = 0.4f;
+    filter.min_width_0 = 3;
+    filter.min_height_0 = 4;
+    filter.min_area_0 = 12;
     filter.confidence_threshold_1 = 0.5f;
     filter.min_width_1 = 5;
     filter.min_height_1 = 6;
@@ -831,8 +842,19 @@ int TestTieredYoloContrastAndSizeFiltering() {
     };
 
     compose();
+    if (AssertTrue(output.details.empty(),
+                   "contrast <= threshold 1 should use dark strong-band group 0")) return 1;
+    yolo.details[0].w = 3.0f;
+    yolo.details[0].h = 4.0f;
+    yolo.details[0].area = 12;
+    yolo.details[0].score = 0.39f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "dark strong band should use confidence threshold 0")) return 1;
+    yolo.details[0].score = 0.4f;
+    compose();
     if (AssertTrue(output.details.size() == 1,
-                   "contrast <= threshold 1 should bypass size filtering")) return 1;
+                   "dark strong band should include all group 0 boundaries")) return 1;
     yolo.details[0].contrast = 0.9f;
     compose();
     if (AssertTrue(output.details.empty(),
@@ -880,6 +902,10 @@ int TestTieredYoloContrastAndSizeFiltering() {
     bright_filter.contrast_threshold_1 = 1.1f;
     bright_filter.contrast_threshold_2 = 1.2f;
     bright_filter.contrast_direction = InspectionConfig::ContrastFilterDirection::GreaterEqual;
+    bright_filter.confidence_threshold_0 = 0.4f;
+    bright_filter.min_width_0 = 3;
+    bright_filter.min_height_0 = 4;
+    bright_filter.min_area_0 = 12;
     bright_filter.confidence_threshold_1 = 0.5f;
     bright_filter.min_width_1 = 5;
     bright_filter.min_height_1 = 6;
@@ -889,8 +915,19 @@ int TestTieredYoloContrastAndSizeFiltering() {
     bright_filter.min_height_2 = 12;
     bright_filter.min_area_2 = 60;
     compose();
+    if (AssertTrue(output.details.empty(),
+                   "bright-polarity contrast >= threshold 2 should use group 0")) return 1;
+    yolo.details[0].w = 3.0f;
+    yolo.details[0].h = 4.0f;
+    yolo.details[0].area = 12;
+    yolo.details[0].score = 0.39f;
+    compose();
+    if (AssertTrue(output.details.empty(),
+                   "bright strong band should use confidence threshold 0")) return 1;
+    yolo.details[0].score = 0.4f;
+    compose();
     if (AssertTrue(output.details.size() == 1,
-                   "bright-polarity contrast >= threshold 2 should bypass size filtering")) return 1;
+                   "bright strong band should include all group 0 boundaries")) return 1;
     yolo.details[0].contrast = 1.1f;
     compose();
     if (AssertTrue(output.details.empty(),
@@ -899,6 +936,7 @@ int TestTieredYoloContrastAndSizeFiltering() {
     yolo.details[0].w = 10.0f;
     yolo.details[0].h = 12.0f;
     yolo.details[0].area = 60;
+    yolo.details[0].score = 0.7f;
     compose();
     if (AssertTrue(output.details.size() == 1,
                    "bright-polarity low band should use size group 2")) return 1;

@@ -74,7 +74,7 @@ internal/result_builder.cpp
 ComposeOutputWithDefectFilter()
 ```
 
-细化发生在阈值过滤之前，因此分段对比度阈值以及两组附加置信度、宽、高、面积阈值使用的是细化后的数据。
+细化发生在阈值过滤之前，因此分段对比度阈值以及三组附加置信度、宽、高、面积阈值使用的是细化后的数据。
 
 ## 4. 细化的前置条件
 
@@ -433,6 +433,7 @@ Enable
 confidence_threshold
 contrast_threshold_1 / contrast_threshold_2
 contrast_direction
+confidence_threshold_0 / min_width_0 / min_height_0 / min_area_0
 confidence_threshold_1 / min_width_1 / min_height_1 / min_area_1
 confidence_threshold_2 / min_width_2 / min_height_2 / min_area_2
 ```
@@ -442,7 +443,7 @@ confidence_threshold_2 / min_width_2 / min_height_2 / min_area_2
 `contrast_direction=less_equal` 用于暗缺陷：
 
 ```text
-contrast <= threshold_1              → 直接保留
+contrast <= threshold_1              → 检查第 0 组附加置信度、宽、高、面积
 threshold_1 < contrast <= threshold_2 → 检查第 1 组附加置信度、宽、高、面积
 contrast > threshold_2               → 检查第 2 组附加置信度、宽、高、面积
 ```
@@ -450,12 +451,12 @@ contrast > threshold_2               → 检查第 2 组附加置信度、宽、
 `contrast_direction=greater_equal` 用于亮缺陷：
 
 ```text
-contrast >= threshold_2              → 直接保留
+contrast >= threshold_2              → 检查第 0 组附加置信度、宽、高、面积
 threshold_1 <= contrast < threshold_2 → 检查第 1 组附加置信度、宽、高、面积
 contrast < threshold_1               → 检查第 2 组附加置信度、宽、高、面积
 ```
 
-当两个新对比度阈值均为 `0` 时关闭分段过滤，两组附加置信度和几何阈值随之被忽略，但最前面的统一 `confidence_threshold` 始终生效。旧配置项 `contrast_threshold`、`min_width`、`min_height`、`min_area` 仍然兼容；仅在新分段阈值未启用时走旧过滤逻辑。
+当两个新对比度阈值均为 `0` 时关闭分段过滤，三组附加置信度和几何阈值随之被忽略，但最前面的统一 `confidence_threshold` 始终生效。旧配置项 `contrast_threshold`、`min_width`、`min_height`、`min_area` 仍然兼容；仅在新分段阈值未启用时走旧过滤逻辑。第 0 组缺省值均为 `0`，因此未添加新配置项时兼容原来的直接保留行为。
 
 细化模式与类别的对比度极性应保持一致。例如给暗缺陷类别配置 `bright`，细化算法会寻找亮区域，但后续仍可能按暗缺陷方向过滤，造成不符合预期的结果。
 
@@ -556,6 +557,10 @@ std::isfinite(contrast_ratio) && contrast_ratio >= 0.0f
 contrast_threshold_1=0.8
 contrast_threshold_2=0.9
 contrast_direction=less_equal
+confidence_threshold_0=0.4
+min_width_0=2
+min_height_0=2
+min_area_0=4
 confidence_threshold_1=0.5
 min_width_1=5
 min_height_1=5
@@ -566,7 +571,7 @@ min_height_2=10
 min_area_2=50
 ```
 
-此时 `contrast <= 0.8` 直接保留；`0.8 < contrast <= 0.9` 要求附加置信度不小于 `0.5`、宽高均不小于 `5` 且面积不小于 `20`；`contrast > 0.9` 要求附加置信度不小于 `0.7`、宽高均不小于 `10` 且面积不小于 `50`。
+此时 `contrast <= 0.8` 要求附加置信度不小于 `0.4`、宽高均不小于 `2` 且面积不小于 `4`；`0.8 < contrast <= 0.9` 要求附加置信度不小于 `0.5`、宽高均不小于 `5` 且面积不小于 `20`；`contrast > 0.9` 要求附加置信度不小于 `0.7`、宽高均不小于 `10` 且面积不小于 `50`。
 
 亮缺陷使用镜像方向，例如：
 
@@ -575,6 +580,10 @@ min_area_2=50
 contrast_threshold_1=1.1
 contrast_threshold_2=1.2
 contrast_direction=greater_equal
+confidence_threshold_0=0.4
+min_width_0=2
+min_height_0=2
+min_area_0=4
 confidence_threshold_1=0.5
 min_width_1=5
 min_height_1=5
@@ -585,7 +594,7 @@ min_height_2=10
 min_area_2=50
 ```
 
-此时 `contrast >= 1.2` 直接保留，`1.1 <= contrast < 1.2` 检查第 1 组附加置信度和宽高面积，`contrast < 1.1` 检查第 2 组附加置信度和宽高面积。
+此时 `contrast >= 1.2` 检查第 0 组附加置信度和宽高面积，`1.1 <= contrast < 1.2` 检查第 1 组，`contrast < 1.1` 检查第 2 组。
 
 ### 11.4 两个分段阈值均为 0 时不检查冲突
 
@@ -685,7 +694,7 @@ seed_threshold = max(2.0, 2.5 × noise_sigma)
 对比度仍作为有效数值输出
   ↓
 contrast_threshold_1 或 contrast_threshold_2 > 0
-  → 根据 contrast_direction 进入直接保留区或两组宽高过滤区
+  → 根据 contrast_direction 进入第 0、1、2 组附加过滤区
 
 contrast_threshold_1 = 0 且 contrast_threshold_2 = 0
   → 不检查极性冲突，直接通过对比度过滤

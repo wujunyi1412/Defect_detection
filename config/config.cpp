@@ -123,6 +123,11 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
     filter.min_area = GetIntOr(ini, section, "min_area", 0);
     filter.contrast_threshold_1 = GetFloatOr(ini, section, "contrast_threshold_1", 0.0f);
     filter.contrast_threshold_2 = GetFloatOr(ini, section, "contrast_threshold_2", 0.0f);
+    filter.confidence_threshold_0 = GetFloatOr(
+        ini, section, "confidence_threshold_0", 0.0f);
+    filter.min_width_0 = GetIntOr(ini, section, "min_width_0", 0);
+    filter.min_height_0 = GetIntOr(ini, section, "min_height_0", 0);
+    filter.min_area_0 = GetIntOr(ini, section, "min_area_0", 0);
     filter.confidence_threshold_1 = GetFloatOr(
         ini, section, "confidence_threshold_1", 0.0f);
     filter.min_width_1 = GetIntOr(ini, section, "min_width_1", filter.min_width);
@@ -264,6 +269,8 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
                                  (prefix + "contrast_threshold_1").c_str(), err) ||
             !ValidateNonNegative(filter.contrast_threshold_2,
                                  (prefix + "contrast_threshold_2").c_str(), err) ||
+            !ValidateNonNegative(filter.confidence_threshold_0,
+                                 (prefix + "confidence_threshold_0").c_str(), err) ||
             !ValidateNonNegative(filter.confidence_threshold_1,
                                  (prefix + "confidence_threshold_1").c_str(), err) ||
             !ValidateNonNegative(filter.confidence_threshold_2,
@@ -274,7 +281,8 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
             err = prefix + "contrast_threshold_2 must be >= contrast_threshold_1";
             return false;
         }
-        if (filter.min_width_1 < 0 || filter.min_height_1 < 0 || filter.min_area_1 < 0 ||
+        if (filter.min_width_0 < 0 || filter.min_height_0 < 0 || filter.min_area_0 < 0 ||
+            filter.min_width_1 < 0 || filter.min_height_1 < 0 || filter.min_area_1 < 0 ||
             filter.min_width_2 < 0 || filter.min_height_2 < 0 || filter.min_area_2 < 0) {
             err = prefix + "group width/height/area thresholds must be >= 0";
             return false;

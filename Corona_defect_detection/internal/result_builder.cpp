@@ -43,14 +43,22 @@ bool PassTieredContrastAndSize(
     if (!IsContrastRatioValid(detail.contrast)) return false;
 
     if (filter.contrast_direction == InspectionConfig::ContrastFilterDirection::LessEqual) {
-        if (detail.contrast <= filter.contrast_threshold_1) return true;
+        if (detail.contrast <= filter.contrast_threshold_1) {
+            return PassMinimumGeometry(
+                detail, filter.confidence_threshold_0,
+                filter.min_width_0, filter.min_height_0, filter.min_area_0);
+        }
         if (detail.contrast <= filter.contrast_threshold_2) {
             return PassMinimumGeometry(
                 detail, filter.confidence_threshold_1,
                 filter.min_width_1, filter.min_height_1, filter.min_area_1);
         }
     } else {
-        if (detail.contrast >= filter.contrast_threshold_2) return true;
+        if (detail.contrast >= filter.contrast_threshold_2) {
+            return PassMinimumGeometry(
+                detail, filter.confidence_threshold_0,
+                filter.min_width_0, filter.min_height_0, filter.min_area_0);
+        }
         if (detail.contrast >= filter.contrast_threshold_1) {
             return PassMinimumGeometry(
                 detail, filter.confidence_threshold_1,

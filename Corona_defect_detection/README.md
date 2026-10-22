@@ -134,9 +134,9 @@ Corona_defect_detection/
 [Lineartifacts_config]
 ```
 
-每个类别过滤器保留原有的统一 `confidence_threshold`，并增加两级 `contrast_threshold_1/2`、`contrast_direction` 以及两组附加 `confidence_threshold/min_width/min_height/min_area`。`less_equal` 用于暗缺陷，`greater_equal` 用于亮缺陷；强极性区直接保留，中间区和弱极性区分别检查第 1、2 组附加置信度、宽、高、面积。两个对比度阈值均为 0 时关闭整套分段过滤，但原有统一置信度仍然生效。旧版配置继续兼容。
+每个类别过滤器保留原有的统一 `confidence_threshold`，并增加两级 `contrast_threshold_1/2`、`contrast_direction` 以及三组附加 `confidence_threshold/min_width/min_height/min_area`。`less_equal` 用于暗缺陷，`greater_equal` 用于亮缺陷；强极性区、中间区和弱极性区分别检查第 0、1、2 组附加置信度、宽、高、面积。两个对比度阈值均为 0 时关闭整套分段过滤，但原有统一置信度仍然生效。旧版配置继续兼容；未配置第 0 组或将其全部设为 0 时，强极性区仍保持原先的直接保留行为。
 
-完整的区间边界、关闭方式和两组参数关系见 [`YOLO_TIERED_FILTER_LOGIC.md`](YOLO_TIERED_FILTER_LOGIC.md)。
+完整的区间边界、关闭方式和三组参数关系见 [`YOLO_TIERED_FILTER_LOGIC.md`](YOLO_TIERED_FILTER_LOGIC.md)。
 
 ### 6. internal/ — 后处理模块
 
