@@ -296,6 +296,7 @@ int TestPatchCoreAnyYoloIouFiltering() {
 
     InspectionDLL::Internal::ResultComposeContext context;
     context.patchcore_yolo_iou_threshold = 0.3f;
+    context.draw_filtered_defects = true;
     InspectionDLL::InferenceResult output;
     const cv::Mat gray(128, 128, CV_8U, cv::Scalar(128));
     InspectionDLL::Internal::ComposeOutputWithDefectFilter(
@@ -308,6 +309,10 @@ int TestPatchCoreAnyYoloIouFiltering() {
                    output.details[0].name == "BrightStripes" &&
                    output.details[1].name == "BrightStripes",
                    "one YOLO IoU above the threshold should remove PatchCore details")) return 1;
+    if (AssertTrue(output.filtered_details.size() == 1 &&
+                       output.filtered_details[0].source == "PatchCore" &&
+                       output.filtered_details[0].reason == "yolo_iou",
+                   "removed PatchCore details should be available for diagnostic drawing")) return 1;
 
     context.patchcore_yolo_iou_threshold = 0.34f;
     InspectionDLL::Internal::ComposeOutputWithDefectFilter(
@@ -347,6 +352,11 @@ int TestPatchCoreAnyYoloIouFiltering() {
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.empty() && output.result == "OK",
                    "AA-filtered YOLO should first suppress overlapping PatchCore and then yield OK")) return 1;
+    if (AssertTrue(output.filtered_details.size() == 2 &&
+                       output.filtered_details[0].source == "PatchCore" &&
+                       output.filtered_details[1].source == "YOLO" &&
+                       output.filtered_details[1].reason == "AA",
+                   "IoU- and AA-filtered details should both be retained for drawing")) return 1;
 
     context.aa_filter.enable = false;
     context.iqt_filter.enable = true;
@@ -358,6 +368,9 @@ int TestPatchCoreAnyYoloIouFiltering() {
         patchcore, yolo, gray.size(), gray, gray, output, context);
     if (AssertTrue(output.details.empty() && output.result == "OK",
                    "IQT-filtered YOLO should first suppress overlapping PatchCore and then yield OK")) return 1;
+    if (AssertTrue(output.filtered_details.size() == 2 &&
+                       output.filtered_details[1].reason == "IQT",
+                   "IQT-filtered YOLO details should be retained for drawing")) return 1;
     return 0;
 }
 
@@ -439,6 +452,7 @@ int TestAaConfigParsing() {
                << "[post]\n"
                << "patchcore_yolo_iou_threshold=0.25\n"
                << "contrast_mode=2\n"
+               << "draw_filtered_defects=1\n"
                << "[AA]\n"
                << "enabled=1\n"
                << "center_y_min=100.5\n"
@@ -500,6 +514,8 @@ int TestAaConfigParsing() {
                    "PatchCore/YOLO IoU threshold should be parsed")) return 1;
     if (AssertTrue(config.contrast_mode == 2,
                    "contrast calculation mode should be parsed")) return 1;
+    if (AssertTrue(config.draw_filtered_defects,
+                   "filtered-defect drawing flag should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.enable, "AA config enabled flag should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.center_y_min == 100.5f &&
                    config.aa_filter.center_y_max == 200.5f,

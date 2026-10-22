@@ -315,6 +315,52 @@ bool RenderResultOverlayToHalconHandle(
             }
         }
 
+        for (const auto& filtered : result.filtered_details) {
+            const auto& d = filtered.detail;
+            const int x = static_cast<int>(std::round(d.x));
+            const int y = static_cast<int>(std::round(d.y));
+            const int w = static_cast<int>(std::round(d.w));
+            const int h = static_cast<int>(std::round(d.h));
+            if (w <= 0 || h <= 0) continue;
+
+            cv::Rect r(x, y, w, h);
+            r &= cv::Rect(0, 0, width, height);
+            if (r.empty()) continue;
+
+            const bool is_patchcore = filtered.source == "PatchCore";
+            const cv::Scalar filtered_color = is_patchcore
+                ? cv::Scalar(255, 180, 0)
+                : cv::Scalar(0, 215, 255);
+            if (draw_defect_box) {
+                const cv::Rect draw_r = expand_defect_box
+                    ? ExpandDefectRect(r, vis.size())
+                    : r;
+                cv::rectangle(vis, draw_r, filtered_color, 1);
+            }
+
+            if (draw_box_details) {
+                std::vector<std::string> lines;
+                lines.reserve(is_patchcore ? 2 : 4);
+                std::string name = d.name.empty() ? "defect" : d.name;
+                lines.push_back("Filtered " + filtered.source + ": " + name);
+                std::ostringstream oss;
+                oss << filtered.reason << " Score:" << std::fixed
+                    << std::setprecision(3) << d.score;
+                lines.push_back(oss.str());
+                if (!is_patchcore) {
+                    std::ostringstream measurement;
+                    measurement << "Contrast:" << std::fixed << std::setprecision(2)
+                                << d.contrast << " Area:" << d.area;
+                    lines.push_back(measurement.str());
+
+                    std::ostringstream dimensions;
+                    dimensions << "W:" << w << " H:" << h;
+                    lines.push_back(dimensions.str());
+                }
+                DrawLabelBlock(vis, r, lines, filtered_color, width, height);
+            }
+        }
+
         if (!o_imageHandle) {
             return true;
         }

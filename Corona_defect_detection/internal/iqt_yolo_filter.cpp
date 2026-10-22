@@ -38,12 +38,15 @@ bool ShouldFilter(const DetectionResult& detail,
 }  // namespace
 
 void ApplyIqtYoloFilter(std::vector<DetectionResult>& details,
-                        const InspectionConfig::IqtFilterConfig& config) {
+                        const InspectionConfig::IqtFilterConfig& config,
+                        std::vector<DetectionResult>* removed_details) {
     if (!config.enable) return;
     details.erase(
         std::remove_if(details.begin(), details.end(),
                        [&](const DetectionResult& detail) {
-                           return ShouldFilter(detail, config);
+                           const bool removed = ShouldFilter(detail, config);
+                           if (removed && removed_details) removed_details->push_back(detail);
+                           return removed;
                        }),
         details.end());
 }

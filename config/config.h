@@ -120,6 +120,7 @@ struct InspectionConfigData {
     bool draw_defect_box = true;
     bool expand_defect_box = false;
     bool draw_box_details = true;
+    bool draw_filtered_defects = false;
     bool draw_defect_mask = false;
     bool concat_original_image = false;
     int defect_mask_color_r = 255;

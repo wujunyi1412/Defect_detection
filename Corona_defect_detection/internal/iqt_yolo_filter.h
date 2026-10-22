@@ -8,6 +8,7 @@
 namespace InspectionDLL::Internal {
 
 void ApplyIqtYoloFilter(std::vector<DetectionResult>& details,
-                        const InspectionConfig::IqtFilterConfig& config);
+                        const InspectionConfig::IqtFilterConfig& config,
+                        std::vector<DetectionResult>* removed_details = nullptr);
 
 }  // namespace InspectionDLL::Internal

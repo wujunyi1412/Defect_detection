@@ -8,6 +8,7 @@
 namespace InspectionDLL::Internal {
 
 void ApplyAaYoloFilter(std::vector<DetectionResult>& details,
-                       const InspectionConfig::AaFilterConfig& config);
+                       const InspectionConfig::AaFilterConfig& config,
+                       std::vector<DetectionResult>* removed_details = nullptr);
 
 }  // namespace InspectionDLL::Internal

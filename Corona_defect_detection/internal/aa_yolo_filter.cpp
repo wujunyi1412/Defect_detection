@@ -52,14 +52,18 @@ bool ShouldFilterByPositionRule(const DetectionResult& detail,
 }  // namespace
 
 void ApplyAaYoloFilter(std::vector<DetectionResult>& details,
-                       const InspectionConfig::AaFilterConfig& config) {
+                       const InspectionConfig::AaFilterConfig& config,
+                       std::vector<DetectionResult>* removed_details) {
     if (!config.enable && !config.position_filter_enable) return;
     details.erase(
         std::remove_if(details.begin(), details.end(),
                        [&](const DetectionResult& detail) {
-                           return (config.enable && ShouldFilterByBandRule(detail, config)) ||
-                                  (config.position_filter_enable &&
-                                   ShouldFilterByPositionRule(detail, config));
+                           const bool removed =
+                               (config.enable && ShouldFilterByBandRule(detail, config)) ||
+                               (config.position_filter_enable &&
+                                ShouldFilterByPositionRule(detail, config));
+                           if (removed && removed_details) removed_details->push_back(detail);
+                           return removed;
                        }),
         details.end());
 }

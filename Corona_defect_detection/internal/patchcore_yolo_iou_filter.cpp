@@ -32,7 +32,8 @@ float CalculateBoxIou(const DetectionResult& lhs, const DetectionResult& rhs) {
 void ApplyPatchCoreYoloIouFilter(
     std::vector<DetectionResult>& patchcore_details,
     const std::vector<DetectionResult>& yolo_details,
-    float iou_threshold) {
+    float iou_threshold,
+    std::vector<DetectionResult>* removed_details) {
     if (patchcore_details.empty() || yolo_details.empty()) return;
 
     patchcore_details.erase(
@@ -42,6 +43,7 @@ void ApplyPatchCoreYoloIouFilter(
             [&](const DetectionResult& patchcore_detail) {
                 for (const auto& yolo_detail : yolo_details) {
                     if (CalculateBoxIou(patchcore_detail, yolo_detail) > iou_threshold) {
+                        if (removed_details) removed_details->push_back(patchcore_detail);
                         return true;
                     }
                 }

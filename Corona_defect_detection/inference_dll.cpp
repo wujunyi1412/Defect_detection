@@ -44,6 +44,7 @@ public:
     bool draw_defect_box_ = true;
     bool expand_defect_box_ = false;
     bool draw_box_details_ = true;
+    bool draw_filtered_defects_ = false;
     bool concat_original_image_ = false;
     bool yolo_enabled_ = true;
     bool patchcore_enabled_ = true;
@@ -71,6 +72,7 @@ public:
         Internal::ResultComposeContext context;
         context.score_threshold = score_threshold_;
         context.patchcore_yolo_iou_threshold = patchcore_yolo_iou_threshold_;
+        context.draw_filtered_defects = draw_filtered_defects_;
         context.contrast_mode = contrast_mode_;
         context.abnormal_filter = abnormal_filter_;
         context.category_filters = category_filters_;
@@ -121,6 +123,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->draw_defect_box_ = config.draw_defect_box;
     pImpl->expand_defect_box_ = config.expand_defect_box;
     pImpl->draw_box_details_ = config.draw_box_details;
+    pImpl->draw_filtered_defects_ = config.draw_filtered_defects;
     pImpl->concat_original_image_ = config.concat_original_image;
     pImpl->yolo_enabled_ = config.yolo_enabled;
     pImpl->patchcore_enabled_ = config.patchcore_enabled;
@@ -175,6 +178,7 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
     if (!pImpl->yolo_enabled_ && !pImpl->patchcore_enabled_) {
         output.result = "OK";
         output.details.clear();
+        output.filtered_details.clear();
         output.yolo_score = 0.0f;
         output.patchcore_score = 0.0f;
         output.patchcore_area_ratio = 0.0f;

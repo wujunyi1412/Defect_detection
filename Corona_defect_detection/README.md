@@ -138,6 +138,8 @@ Corona_defect_detection/
 
 完整的区间边界、关闭方式和三组参数关系见 [`YOLO_TIERED_FILTER_LOGIC.md`](YOLO_TIERED_FILTER_LOGIC.md)。
 
+`[post] draw_filtered_defects=1` 时，最终标注图还会显示被类别阈值、PatchCore 阈值、模型间 IoU、AA 或 IQT 过滤掉的候选框。过滤结果仅用于诊断绘图，不会进入正式 `details`，也不会改变 OK/NG 判定。过滤掉的 YOLO 使用橙色细框，PatchCore 使用蓝色细框；开启 `draw_box_details` 后会标注来源和过滤原因，其中 YOLO 还会显示置信度、宽、高、对比度和面积，PatchCore 保持简略信息。
+
 ### 6. internal/ — 后处理模块
 
 详见 `internal/README.md`，负责：

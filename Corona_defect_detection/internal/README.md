@@ -92,10 +92,11 @@ inference_dll.cpp (主控)
 #### `ComposeOutputWithDefectFilter`（完整模式，带类别过滤）
 1. **YOLO 过滤**：通过“类别名 → `CategoryFilterConfig`”映射逐类别过滤；原有 `confidence_threshold` 始终先执行。`traditional_measure_mode=dark` 调用暗缺陷细化，`traditional_measure_mode=bright` 调用亮缺陷细化，`none` 关闭细化。启用 `contrast_threshold_1/2` 后按对比度分为第 0、1、2 组三个附加置信度/宽高面积过滤区；`contrast_direction` 控制暗缺陷（`less_equal`）或亮缺陷（`greater_equal`）方向。第 0 组全部为 0 时兼容原先强极性区直接保留的行为
 2. **PatchCore 过滤**：按 `AbnormalFilterConfig` 过滤，十字线模式逐分量过滤。PatchCore `contrast_threshold > 0` 时保留 `contrast >= threshold`，配置为 `0` 时关闭对比度过滤
-3. **AA 后过滤**：标准 YOLO 过滤后，`aa_yolo_filter` 包含两条独立规则：“中心 Y +（最小宽高比或最大宽度）”和“左上角 X/Y + 宽/高范围”。第一条规则中 `max_width=0` 可关闭宽度条件；两条规则分别由 `[AA]` 开关控制，任一启用规则命中就移除该 YOLO 结果
-4. **PatchCore/YOLO IoU 过滤**：对每条已通过过滤的 PatchCore `Abnormal`，计算它与全部最终 YOLO 框的 IoU；任一 IoU 严格大于 `post.patchcore_yolo_iou_threshold` 时移除该 PatchCore 明细。没有 YOLO 时始终保留，阈值设为 `1` 可关闭此过滤
+3. **PatchCore/YOLO IoU 过滤**：对每条已通过基础过滤的 PatchCore `Abnormal`，计算它与已通过类别过滤、但尚未执行 AA/IQT 的 YOLO 框的 IoU；任一 IoU 严格大于 `post.patchcore_yolo_iou_threshold` 时移除该 PatchCore 明细。没有 YOLO 时始终保留，阈值设为 `1` 可关闭此过滤
+4. **AA 后过滤**：模型间 IoU 过滤后，`aa_yolo_filter` 包含两条独立规则：“中心 Y +（最小宽高比或最大宽度）”和“左上角 X/Y + 宽/高范围”。第一条规则中 `max_width=0` 可关闭宽度条件；两条规则分别由 `[AA]` 开关控制，任一启用规则命中就移除该 YOLO 结果
 5. **IQT 后过滤**：在 PatchCore/YOLO IoU 过滤之后，按独立的 `[IQT]` 配置执行“中心 Y +（最小宽高比或最大宽度）”规则；`max_width=0` 时关闭宽度条件，参数不与 `[AA]` 共用
 6. **OK/NG 判定**：任一有效检测 → `"NG"`，否则 `"OK"`
+7. **过滤结果诊断绘图**：`post.draw_filtered_defects=1` 时记录各阶段移除的 YOLO/PatchCore 候选并画到最终图上；这些候选不进入正式输出明细，也不参与 OK/NG 判定
 
 ---
 

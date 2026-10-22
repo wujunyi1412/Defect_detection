@@ -22,6 +22,12 @@ struct DetectionResult {
     cv::Mat mask;
 };
 
+struct FilteredDetectionResult {
+    DetectionResult detail;
+    std::string source;
+    std::string reason;
+};
+
 struct MaskOverlayOptions {
     bool enabled = false;
     int color_r = 255;
@@ -33,6 +39,8 @@ struct MaskOverlayOptions {
 struct InferenceResult {
     std::string result; // "OK" or "NG"
     std::vector<DetectionResult> details;
+    // Diagnostic-only results used by the overlay. They do not affect result/details.
+    std::vector<FilteredDetectionResult> filtered_details;
     float yolo_score;
     float patchcore_score;
     float patchcore_area_ratio;

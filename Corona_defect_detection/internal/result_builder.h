@@ -9,6 +9,7 @@ namespace InspectionDLL::Internal {
 struct ResultComposeContext {
     float score_threshold = 1.4f;
     float patchcore_yolo_iou_threshold = 0.0f;
+    bool draw_filtered_defects = false;
     ContrastCalculationMode contrast_mode = ContrastCalculationMode::AdaptiveLocalPlane;
     InspectionConfig::AaFilterConfig aa_filter;
     InspectionConfig::IqtFilterConfig iqt_filter;
