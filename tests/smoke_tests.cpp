@@ -141,6 +141,40 @@ int TestBrightDefectRefinement() {
     return 0;
 }
 
+int TestMaskGuidedDefectRefinement() {
+    cv::Mat gray(80, 80, CV_8U, cv::Scalar(100));
+    gray(cv::Rect(28, 29, 7, 5)).setTo(220);
+    // A stronger but unrelated response inside the YOLO box must not win over
+    // the component supported by the YOLO mask.
+    gray(cv::Rect(39, 39, 2, 2)).setTo(245);
+
+    cv::Mat yolo_mask(gray.size(), CV_8U, cv::Scalar(0));
+    yolo_mask(cv::Rect(30, 30, 3, 3)).setTo(255);
+
+    InspectionDLL::DetectionResult detail;
+    detail.name = "Bright_clusters";
+    detail.x = 25.0f;
+    detail.y = 25.0f;
+    detail.w = 18.0f;
+    detail.h = 18.0f;
+    detail.area = 9;
+    detail.score = 0.9f;
+    detail.mask = yolo_mask;
+
+    const bool refined = InspectionDLL::Internal::RefineBrightDefectGeometryMaskGuided(
+        gray, detail, InspectionDLL::Internal::ContrastCalculationMode::AdaptiveLocalPlane);
+    if (AssertTrue(refined, "mask-guided bright defect should be refined")) return 1;
+    if (AssertTrue(detail.x >= 27.0f && detail.x <= 29.0f &&
+                       detail.y >= 28.0f && detail.y <= 30.0f &&
+                       detail.w >= 6.0f && detail.w <= 8.0f &&
+                       detail.h >= 4.0f && detail.h <= 6.0f &&
+                       detail.area >= 28 && detail.area <= 42,
+                   "mask-guided refinement should recover the supported defect boundary")) return 1;
+    if (AssertTrue(detail.x + detail.w < 39.0f && detail.y + detail.h < 39.0f,
+                   "mask-guided refinement should reject a distant stronger distractor")) return 1;
+    return 0;
+}
+
 int TestDefectBoxExpansionClipsToImage() {
     const cv::Size image_size(20, 15);
     const cv::Rect centered = InspectionOverlay::ExpandDefectRectForTest(
@@ -482,6 +516,8 @@ int TestAaConfigParsing() {
                << "BrightStripes=BrightLine\n"
                << "[Stain_config]\n"
                << "traditional_measure_mode=dark\n"
+               << "refinement_method=gray_adaptive\n"
+               << "refinement_polarity=auto\n"
                << "contrast_threshold_1=0.8\n"
                << "contrast_threshold_2=0.9\n"
                << "contrast_direction=less_equal\n"
@@ -499,6 +535,8 @@ int TestAaConfigParsing() {
                << "min_area_2=60\n"
                << "[BrightStripes_config]\n"
                << "traditional_measure_mode=bright\n"
+               << "refinement_method=mask_guided\n"
+               << "refinement_polarity=bright\n"
                << "[Decolorization_config]\n"
                << "use_traditional_measure=1\n";
     }
@@ -566,6 +604,11 @@ int TestAaConfigParsing() {
                        InspectionConfig::TraditionalMeasureMode::Dark,
                     "Stain dark refinement should be configuration-driven")) return 1;
     const auto& stain_filter = config.category_filters.at("Stain");
+    if (AssertTrue(stain_filter.refinement_method ==
+                       InspectionConfig::DefectRefinementMethod::GrayAdaptive &&
+                       stain_filter.refinement_polarity ==
+                       InspectionConfig::DefectRefinementPolarity::Auto,
+                   "new refinement method and polarity should override legacy mapping")) return 1;
     if (AssertTrue(stain_filter.contrast_threshold_1 == 0.8f &&
                        stain_filter.contrast_threshold_2 == 0.9f &&
                        stain_filter.contrast_direction ==
@@ -583,9 +626,17 @@ int TestAaConfigParsing() {
     if (AssertTrue(config.category_filters.at("BrightStripes").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::Bright,
                     "bright refinement should be configuration-driven")) return 1;
+    if (AssertTrue(config.category_filters.at("BrightStripes").refinement_method ==
+                       InspectionConfig::DefectRefinementMethod::MaskGuided,
+                   "mask-guided refinement method should be parsed")) return 1;
     if (AssertTrue(config.category_filters.at("Decolorization").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::Dark,
                     "legacy traditional measurement should map to dark refinement")) return 1;
+    if (AssertTrue(config.category_filters.at("Decolorization").refinement_method ==
+                       InspectionConfig::DefectRefinementMethod::GrayAdaptive &&
+                       config.category_filters.at("Decolorization").refinement_polarity ==
+                       InspectionConfig::DefectRefinementPolarity::Dark,
+                   "legacy boolean should map to gray-adaptive dark refinement")) return 1;
     if (AssertTrue(config.category_filters.at("Glue_overflow").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::None,
                     "other categories should not enable refinement by default")) return 1;
@@ -980,6 +1031,7 @@ int main() {
     if (TestFloatOverlayFileIs8Bit()) return 1;
     if (TestConfigDefaults()) return 1;
     if (TestBrightDefectRefinement()) return 1;
+    if (TestMaskGuidedDefectRefinement()) return 1;
     if (TestAaYoloFilterRules()) return 1;
     if (TestIqtYoloFilterRules()) return 1;
     if (TestAaConfigParsing()) return 1;

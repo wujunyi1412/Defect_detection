@@ -12,6 +12,23 @@ enum class TraditionalMeasureMode {
     Bright,
 };
 
+// Selects the geometry-refinement algorithm independently from defect polarity.
+// MaskGuided uses the YOLO mask as a spatial prior and image residuals to refine
+// the final foreground boundary.
+enum class DefectRefinementMethod {
+    None,
+    GrayAdaptive,
+    MaskGuided,
+    Invalid,
+};
+
+enum class DefectRefinementPolarity {
+    Auto,
+    Dark,
+    Bright,
+    Invalid,
+};
+
 enum class ContrastFilterDirection {
     LessEqual,
     GreaterEqual,
@@ -40,6 +57,10 @@ struct CategoryFilterConfig {
     int min_height_2 = 0;
     int min_area_2 = 0;
     int min_area = 0;
+    DefectRefinementMethod refinement_method = DefectRefinementMethod::None;
+    DefectRefinementPolarity refinement_polarity = DefectRefinementPolarity::Auto;
+    // Deprecated compatibility field. New code should use refinement_method
+    // and refinement_polarity.
     TraditionalMeasureMode traditional_measure_mode = TraditionalMeasureMode::None;
 };
 

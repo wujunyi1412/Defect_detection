@@ -147,17 +147,53 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
     } else {
         filter.contrast_direction = ContrastFilterDirection::Invalid;
     }
+    // Parse the legacy setting first, then let the new orthogonal settings
+    // override it. This keeps existing INI files behaviorally unchanged.
     std::string configured_mode;
     if (TryGetString(ini, section, "traditional_measure_mode", configured_mode)) {
         const std::string mode = ToLowerCopy(TrimCopy(configured_mode));
         if (mode == "dark") {
             filter.traditional_measure_mode = TraditionalMeasureMode::Dark;
+            filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
+            filter.refinement_polarity = DefectRefinementPolarity::Dark;
         } else if (mode == "bright") {
             filter.traditional_measure_mode = TraditionalMeasureMode::Bright;
+            filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
+            filter.refinement_polarity = DefectRefinementPolarity::Bright;
         }
     } else if (GetBoolOr(ini, section, "use_traditional_measure", false)) {
         // Backward compatibility: the legacy boolean only supported dark defects.
         filter.traditional_measure_mode = TraditionalMeasureMode::Dark;
+        filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
+        filter.refinement_polarity = DefectRefinementPolarity::Dark;
+    }
+
+    std::string configured_refinement_method;
+    if (TryGetString(ini, section, "refinement_method", configured_refinement_method)) {
+        const std::string method = ToLowerCopy(TrimCopy(configured_refinement_method));
+        if (method == "none") {
+            filter.refinement_method = DefectRefinementMethod::None;
+        } else if (method == "gray_adaptive") {
+            filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
+        } else if (method == "mask_guided") {
+            filter.refinement_method = DefectRefinementMethod::MaskGuided;
+        } else {
+            filter.refinement_method = DefectRefinementMethod::Invalid;
+        }
+    }
+
+    std::string configured_refinement_polarity;
+    if (TryGetString(ini, section, "refinement_polarity", configured_refinement_polarity)) {
+        const std::string polarity = ToLowerCopy(TrimCopy(configured_refinement_polarity));
+        if (polarity == "auto") {
+            filter.refinement_polarity = DefectRefinementPolarity::Auto;
+        } else if (polarity == "dark") {
+            filter.refinement_polarity = DefectRefinementPolarity::Dark;
+        } else if (polarity == "bright") {
+            filter.refinement_polarity = DefectRefinementPolarity::Bright;
+        } else {
+            filter.refinement_polarity = DefectRefinementPolarity::Invalid;
+        }
     }
     return filter;
 }
@@ -261,6 +297,14 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
 
     for (const auto& [category, filter] : out.category_filters) {
         const std::string prefix = category + ".";
+        if (filter.refinement_method == DefectRefinementMethod::Invalid) {
+            err = prefix + "refinement_method must be none, gray_adaptive, or mask_guided";
+            return false;
+        }
+        if (filter.refinement_polarity == DefectRefinementPolarity::Invalid) {
+            err = prefix + "refinement_polarity must be auto, dark, or bright";
+            return false;
+        }
         if (filter.contrast_direction == ContrastFilterDirection::Invalid) {
             err = prefix + "contrast_direction must be less_equal or greater_equal";
             return false;
