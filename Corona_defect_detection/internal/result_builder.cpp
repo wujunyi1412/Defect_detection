@@ -70,6 +70,39 @@ bool PassTieredContrastAndSize(
         filter.min_width_2, filter.min_height_2, filter.min_area_2);
 }
 
+bool RefineYoloDetail(const cv::Mat& gray_yolo,
+                      DetectionResult& detail,
+                      const YoloCategoryDefinition& category,
+                      const InspectionConfig::CategoryFilterConfig& filter,
+                      ContrastCalculationMode contrast_mode) {
+    if (filter.refinement_method != InspectionConfig::DefectRefinementMethod::GrayAdaptive) {
+        return false;
+    }
+
+    InspectionConfig::DefectRefinementPolarity polarity = filter.refinement_polarity;
+    if (polarity == InspectionConfig::DefectRefinementPolarity::Auto) {
+        if (category.contrast_polarity == ContrastPolarity::Dark) {
+            polarity = InspectionConfig::DefectRefinementPolarity::Dark;
+        } else if (category.contrast_polarity == ContrastPolarity::Bright) {
+            polarity = InspectionConfig::DefectRefinementPolarity::Bright;
+        } else if (IsContrastRatioValid(detail.contrast)) {
+            polarity = detail.contrast <= 1.0f
+                           ? InspectionConfig::DefectRefinementPolarity::Dark
+                           : InspectionConfig::DefectRefinementPolarity::Bright;
+        } else {
+            return false;
+        }
+    }
+
+    if (polarity == InspectionConfig::DefectRefinementPolarity::Dark) {
+        return RefineDarkDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
+    }
+    if (polarity == InspectionConfig::DefectRefinementPolarity::Bright) {
+        return RefineBrightDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
+    }
+    return false;
+}
+
 }  // namespace
 
 void ComposeOutput(const PatchCoreDerived& pc,
@@ -185,11 +218,7 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
         const InspectionConfig::CategoryFilterConfig* cf = &filter_it->second;
 
         DetectionResult detail = d;
-        if (cf->traditional_measure_mode == InspectionConfig::TraditionalMeasureMode::Dark) {
-            RefineDarkDefectGeometryAdaptive(gray_yolo, detail, context.contrast_mode);
-        } else if (cf->traditional_measure_mode == InspectionConfig::TraditionalMeasureMode::Bright) {
-            RefineBrightDefectGeometryAdaptive(gray_yolo, detail, context.contrast_mode);
-        }
+        RefineYoloDetail(gray_yolo, detail, *category, *cf, context.contrast_mode);
         if (!cf->enable) {
             record_filtered(detail, "YOLO", "category_disabled");
             continue;

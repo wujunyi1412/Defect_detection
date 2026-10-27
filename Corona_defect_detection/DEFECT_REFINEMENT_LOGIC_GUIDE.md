@@ -24,24 +24,33 @@ YOLO 首先提供：
 
 ## 2. 当前实际启用情况
 
-细化方式通过每个类别配置段中的 `traditional_measure_mode` 控制：
+细化算法和缺陷极性通过每个类别配置段中的两个独立参数控制：
 
 ```ini
-traditional_measure_mode=none    # 不细化
-traditional_measure_mode=dark    # 按暗缺陷细化
-traditional_measure_mode=bright  # 按亮缺陷细化
+refinement_method=none             # 不细化
+refinement_method=gray_adaptive    # 当前灰度自适应细化算法
+refinement_polarity=auto           # 根据类别定义或已有对比度判断极性
+refinement_polarity=dark           # 按暗缺陷细化
+refinement_polarity=bright         # 按亮缺陷细化
 ```
 
 当前只有 `Stain` 开启暗缺陷细化：
 
 ```ini
 [Stain_config]
-traditional_measure_mode=dark
+refinement_method=gray_adaptive
+refinement_polarity=dark
 ```
 
-其他类别当前为 `none`。亮缺陷细化代码已经实现，但默认配置没有启用。
+其他类别当前的 `refinement_method` 均为 `none`。亮缺陷细化代码已经实现，但默认配置没有启用。
 
-旧配置 `use_traditional_measure=1` 仍然兼容，并会被解释为 `dark`；新配置建议统一使用 `traditional_measure_mode`。
+旧配置仍然兼容：`traditional_measure_mode=dark/bright` 会映射为
+`gray_adaptive + dark/bright`，`use_traditional_measure=1` 会映射为
+`gray_adaptive + dark`。如果新旧参数同时存在，以 `refinement_method` 和
+`refinement_polarity` 为准。未知取值会使配置加载失败，避免静默使用错误算法。
+
+后续增加基于 YOLO Mask 的算法时，只需扩展细化方法枚举、配置解析和统一分发点；
+在算法真正实现前，不接受 `mask_guided` 配置，避免看似启用但实际回退到其他算法。
 
 ## 3. 总体处理顺序
 
@@ -52,10 +61,9 @@ YOLO 检测结果
   ↓
 查询对应类别的过滤配置
   ↓
-根据 traditional_measure_mode 选择细化方式
-  ├─ none   → 不细化
-  ├─ dark   → RefineDarkDefectGeometryAdaptive()
-  └─ bright → RefineBrightDefectGeometryAdaptive()
+根据 refinement_method 选择细化算法
+  ├─ none          → 不细化
+  └─ gray_adaptive → 根据 refinement_polarity 调用暗/亮缺陷细化
   ↓
 细化成功：更新框、面积、Mask 和对比度
 细化失败：完整保留原始 YOLO 结果
@@ -466,7 +474,7 @@ contrast < threshold_1               → 检查第 2 组附加置信度、宽、
 
 - `Stain`：框不超过 `30×30` 时尝试暗缺陷细化；
 - 大于 `30×30` 的 `Stain`：保留 YOLO 原结果；
-- `BrightStripes`、`Bright_clusters`、`LineArtifacts`：支持配置为 `bright`，但当前未开启；
+- `BrightStripes`、`Bright_clusters`、`LineArtifacts`：支持配置为 `gray_adaptive + bright`，但当前未开启；
 - 其他类别：当前不细化；
 - 细化失败：不会删除缺陷，自动回退到原 YOLO 结果；
 - 一个 YOLO 框：最多选择一个细化连通域；
@@ -476,7 +484,8 @@ contrast < threshold_1               → 检查第 2 组附加置信度、宽、
 
 ```ini
 [BrightStripes_config]
-traditional_measure_mode=bright
+refinement_method=gray_adaptive
+refinement_polarity=bright
 ```
 
 建议先用代表性样本验证 30 像素尺寸限制、背景渐变、产品黑边和多个亮点共框等情况，再决定是否在生产配置中启用。
@@ -489,7 +498,7 @@ traditional_measure_mode=bright
 - `internal/image_utils_adaptive.cpp`：自适应局部平面对比度；
 - `internal/image_utils_global_fov.cpp`：对比度模式分发和全 FOV 对比度；
 - `internal/image_utils.cpp`：局部环形对比度及灰度归一化；
-- `config/config.cpp`：`traditional_measure_mode` 配置解析；
+- `config/config.cpp`：新旧细化配置的解析、兼容映射和取值校验；
 - `config/config.h`：细化模式枚举和类别过滤配置结构；
 - `config.ini`：当前运行参数。
 
@@ -643,7 +652,8 @@ response = max(
 如果真实缺陷是亮的，却配置为：
 
 ```ini
-traditional_measure_mode=dark
+refinement_method=gray_adaptive
+refinement_polarity=dark
 ```
 
 那么亮区域在暗缺陷响应中通常不明显，最大响应可能达不到：
@@ -661,10 +671,10 @@ seed_threshold = max(2.0, 2.5 × noise_sigma)
 当前实现中有三处与极性有关的设置：
 
 1. `internal/yolo_categories.h` 中的 `ContrastPolarity`：决定初始对比度计算使用暗、亮还是自动极性；
-2. `traditional_measure_mode`：决定细化时寻找暗区域还是亮区域；
+2. `refinement_polarity`：决定细化时寻找暗区域还是亮区域，`auto` 会先采用类别极性；
 3. `contrast_direction`：决定分段过滤采用暗缺陷方向还是亮缺陷方向。旧版单阈值配置仍使用类别定义中的 `keep_contrast_below_threshold`。
 
-这三项目前不会自动进行一致性校验。
+显式配置的细化极性与过滤方向目前不会自动进行一致性校验。
 
 如果错误配置为：
 
