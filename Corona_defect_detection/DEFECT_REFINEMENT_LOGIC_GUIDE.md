@@ -29,6 +29,7 @@ YOLO 首先提供：
 ```ini
 refinement_method=none             # 不细化
 refinement_method=gray_adaptive    # 当前灰度自适应细化算法
+refinement_method=mask_guided      # YOLO Mask 引导的灰度边界细化
 refinement_polarity=auto           # 根据类别定义或已有对比度判断极性
 refinement_polarity=dark           # 按暗缺陷细化
 refinement_polarity=bright         # 按亮缺陷细化
@@ -49,8 +50,22 @@ refinement_polarity=dark
 `gray_adaptive + dark`。如果新旧参数同时存在，以 `refinement_method` 和
 `refinement_polarity` 为准。未知取值会使配置加载失败，避免静默使用错误算法。
 
-后续增加基于 YOLO Mask 的算法时，只需扩展细化方法枚举、配置解析和统一分发点；
-在算法真正实现前，不接受 `mask_guided` 配置，避免看似启用但实际回退到其他算法。
+`mask_guided` 已实现并接入统一分发点。它把 YOLO Mask 当作空间先验，而不是最终边界：
+
+1. 从 YOLO Mask 内选择满足灰度响应阈值的强种子；
+2. 从 Mask 外侧的自适应环带采集背景并拟合局部背景平面；
+3. 只允许缺陷在 Mask 的自适应膨胀邻域内生长；
+4. 最终连通域必须同时与强种子和原 YOLO Mask 重叠；
+5. 搜索区允许少量越过 YOLO 框，以恢复被检测框截断的边界；
+6. Mask 为空、背景不足或没有可靠种子时，完整回退到原 YOLO 结果。
+
+默认配置没有启用 `mask_guided`，因此不会改变现有生产结果。建议先在单个类别上灰度验证：
+
+```ini
+[Stain_config]
+refinement_method=mask_guided
+refinement_polarity=dark
+```
 
 ## 3. 总体处理顺序
 
@@ -63,7 +78,8 @@ YOLO 检测结果
   ↓
 根据 refinement_method 选择细化算法
   ├─ none          → 不细化
-  └─ gray_adaptive → 根据 refinement_polarity 调用暗/亮缺陷细化
+  ├─ gray_adaptive → 当前框内灰度自适应细化
+  └─ mask_guided   → YOLO Mask 引导的局部背景与边界细化
   ↓
 细化成功：更新框、面积、Mask 和对比度
 细化失败：完整保留原始 YOLO 结果

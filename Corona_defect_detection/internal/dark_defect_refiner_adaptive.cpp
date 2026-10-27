@@ -187,6 +187,200 @@ bool IsLongProductBoundary(const cv::Mat& outer_black_in_detection) {
            black_extent.width <= static_cast<int>(std::ceil(width * 0.60));
 }
 
+cv::Mat BuildLocalDetectionMask(const cv::Mat& binary_mask,
+                                const cv::Rect& detection,
+                                const cv::Size& image_size) {
+    if (binary_mask.empty() || binary_mask.channels() != 1) return {};
+
+    cv::Mat local;
+    if (binary_mask.size() == image_size) {
+        local = binary_mask(detection).clone();
+    } else if (binary_mask.size() == detection.size()) {
+        local = binary_mask.clone();
+    } else {
+        cv::resize(binary_mask, local, detection.size(), 0.0, 0.0, cv::INTER_NEAREST);
+    }
+
+    cv::Mat local_u8;
+    if (local.depth() == CV_8U) {
+        local_u8 = local;
+    } else {
+        local.convertTo(local_u8, CV_8U);
+    }
+    cv::threshold(local_u8, local_u8, 0, 255, cv::THRESH_BINARY);
+    return local_u8;
+}
+
+bool RefineDefectGeometryMaskGuided(const cv::Mat& gray_yolo,
+                                    DetectionResult& detail,
+                                    ContrastPolarity polarity,
+                                    ContrastCalculationMode contrast_mode) {
+    if (gray_yolo.empty() || gray_yolo.channels() != 1) return false;
+
+    const cv::Rect detection = ClampDetectionRect(detail, gray_yolo.size());
+    if (detection.empty()) return false;
+    const cv::Mat local_yolo_mask = BuildLocalDetectionMask(
+        detail.mask, detection, gray_yolo.size());
+    const int yolo_area = local_yolo_mask.empty() ? 0 : cv::countNonZero(local_yolo_mask);
+    if (yolo_area <= 0) return false;
+
+    const double equivalent_radius = std::sqrt(static_cast<double>(yolo_area) / CV_PI);
+    const int search_margin = std::clamp(
+        static_cast<int>(std::ceil(equivalent_radius * 0.30)), 2, 8);
+    const cv::Rect search_global = ExpandRect(detection, search_margin, gray_yolo.size());
+    const int max_background_radius = std::clamp(
+        static_cast<int>(std::ceil(equivalent_radius * 1.50)), 8, 40);
+    const cv::Rect context = ExpandRect(
+        search_global, max_background_radius + 2, gray_yolo.size());
+    cv::Mat context_u8 = ConvertGrayToU8Normalized(gray_yolo(context));
+    if (context_u8.empty()) return false;
+
+    const cv::Rect detection_in_context(
+        detection.x - context.x, detection.y - context.y,
+        detection.width, detection.height);
+    const cv::Rect search(
+        search_global.x - context.x, search_global.y - context.y,
+        search_global.width, search_global.height);
+    cv::Mat yolo_mask_context(context.size(), CV_8U, cv::Scalar(0));
+    local_yolo_mask.copyTo(yolo_mask_context(detection_in_context));
+
+    const int short_side = std::min(detection.width, detection.height);
+    const int transition_guard = std::clamp(short_side / 12, 1, 3);
+    const cv::Mat image_border_black = FindOuterBlackMask(context_u8, transition_guard);
+
+    const int inner_radius = std::clamp(
+        static_cast<int>(std::round(equivalent_radius * 0.25)), 2, 8);
+    const int initial_outer_radius = std::clamp(
+        static_cast<int>(std::round(equivalent_radius * 1.00)), inner_radius + 4,
+        max_background_radius);
+    const cv::Mat inner_kernel = cv::getStructuringElement(
+        cv::MORPH_ELLIPSE, cv::Size(2 * inner_radius + 1, 2 * inner_radius + 1));
+    cv::Mat inner_dilated;
+    cv::dilate(yolo_mask_context, inner_dilated, inner_kernel);
+
+    const int target_background_pixels = std::max(24, yolo_area);
+    cv::Mat background_mask;
+    for (int outer_radius = initial_outer_radius;;
+         outer_radius = std::min(max_background_radius, outer_radius + 4)) {
+        const cv::Mat outer_kernel = cv::getStructuringElement(
+            cv::MORPH_ELLIPSE, cv::Size(2 * outer_radius + 1, 2 * outer_radius + 1));
+        cv::Mat outer_dilated;
+        cv::dilate(yolo_mask_context, outer_dilated, outer_kernel);
+        cv::bitwise_and(outer_dilated, ~inner_dilated, background_mask);
+        background_mask.setTo(0, image_border_black);
+        if (cv::countNonZero(background_mask) >= target_background_pixels ||
+            outer_radius >= max_background_radius) {
+            break;
+        }
+    }
+    if (cv::countNonZero(background_mask) < 12) return false;
+
+    cv::Vec3d background_plane(0.0, 0.0, MaskedMedian(context_u8, background_mask));
+    double noise_sigma = 0.8;
+    FitBackgroundPlane(context_u8, background_mask, background_plane, noise_sigma);
+
+    int blur_size = std::clamp(
+        (static_cast<int>(std::round(equivalent_radius)) | 1), 3, 31);
+    cv::Mat smoothed_background;
+    cv::GaussianBlur(context_u8, smoothed_background,
+                     cv::Size(blur_size, blur_size), 0.0, 0.0, cv::BORDER_REPLICATE);
+
+    cv::Mat context_f32;
+    cv::Mat smooth_f32;
+    context_u8.convertTo(context_f32, CV_32F);
+    smoothed_background.convertTo(smooth_f32, CV_32F);
+    cv::Mat fitted_background(context.size(), CV_32F);
+    for (int y = 0; y < fitted_background.rows; ++y) {
+        float* row = fitted_background.ptr<float>(y);
+        for (int x = 0; x < fitted_background.cols; ++x) {
+            row[x] = static_cast<float>(background_plane[0] * x +
+                                        background_plane[1] * y + background_plane[2]);
+        }
+    }
+
+    cv::Mat global_response;
+    cv::Mat local_response;
+    if (polarity == ContrastPolarity::Bright) {
+        global_response = context_f32 - fitted_background;
+        local_response = context_f32 - smooth_f32;
+    } else {
+        global_response = fitted_background - context_f32;
+        local_response = smooth_f32 - context_f32;
+    }
+    cv::max(global_response, local_response, global_response);
+    cv::max(global_response, 0.0, global_response);
+    const cv::Mat response = global_response(search);
+
+    const double seed_threshold = std::max(2.0, 2.5 * noise_sigma);
+    const double grow_threshold = std::max(
+        1.5, std::max(seed_threshold * 0.60, 1.50 * noise_sigma));
+    cv::Mat seed_mask;
+    cv::Mat grow_mask;
+    cv::compare(response, seed_threshold, seed_mask, cv::CMP_GE);
+    cv::compare(response, grow_threshold, grow_mask, cv::CMP_GE);
+
+    const cv::Mat yolo_mask_search = yolo_mask_context(search);
+    cv::bitwise_and(seed_mask, yolo_mask_search, seed_mask);
+    if (cv::countNonZero(seed_mask) == 0) return false;
+
+    const int growth_radius = std::clamp(
+        static_cast<int>(std::round(equivalent_radius * 0.60)), 2, 12);
+    const cv::Mat growth_kernel = cv::getStructuringElement(
+        cv::MORPH_ELLIPSE, cv::Size(2 * growth_radius + 1, 2 * growth_radius + 1));
+    cv::Mat allowed_region;
+    cv::dilate(yolo_mask_context, allowed_region, growth_kernel);
+    cv::bitwise_and(grow_mask, allowed_region(search), grow_mask);
+    grow_mask.setTo(0, image_border_black(search));
+    seed_mask.setTo(0, image_border_black(search));
+
+    const cv::Mat close_kernel = cv::getStructuringElement(
+        cv::MORPH_ELLIPSE, cv::Size(3, 3));
+    cv::morphologyEx(grow_mask, grow_mask, cv::MORPH_CLOSE, close_kernel);
+    cv::bitwise_and(grow_mask, allowed_region(search), grow_mask);
+    grow_mask.setTo(0, image_border_black(search));
+
+    cv::Mat labels;
+    cv::Mat stats;
+    cv::Mat centroids;
+    const int label_count = cv::connectedComponentsWithStats(
+        grow_mask, labels, stats, centroids, 8, CV_32S);
+    if (label_count <= 1) return false;
+
+    cv::Mat final_mask(search.size(), CV_8U, cv::Scalar(0));
+    for (int label = 1; label < label_count; ++label) {
+        const int area = stats.at<int>(label, cv::CC_STAT_AREA);
+        if (area <= 0) continue;
+        const cv::Rect component(stats.at<int>(label, cv::CC_STAT_LEFT),
+                                 stats.at<int>(label, cv::CC_STAT_TOP),
+                                 stats.at<int>(label, cv::CC_STAT_WIDTH),
+                                 stats.at<int>(label, cv::CC_STAT_HEIGHT));
+        const cv::Mat component_mask = labels(component) == label;
+        if (cv::countNonZero(seed_mask(component) & component_mask) == 0) continue;
+        if (cv::countNonZero(yolo_mask_search(component) & component_mask) == 0) continue;
+        final_mask(component).setTo(255, component_mask);
+    }
+
+    const cv::Rect refined = NonZeroBoundingRect(final_mask);
+    const int refined_area = cv::countNonZero(final_mask);
+    if (refined.empty() || refined_area <= 0) return false;
+
+    const int refined_x = search_global.x + refined.x;
+    const int refined_y = search_global.y + refined.y;
+    const cv::Mat refined_mask = final_mask(refined);
+    const float refined_contrast = CalculateContrastRatioByMode(
+        gray_yolo, refined_mask, refined_x, refined_y, refined.width, refined.height,
+        polarity, contrast_mode);
+
+    detail.x = static_cast<float>(refined_x);
+    detail.y = static_cast<float>(refined_y);
+    detail.w = static_cast<float>(refined.width);
+    detail.h = static_cast<float>(refined.height);
+    detail.area = refined_area;
+    detail.mask = refined_mask.clone();
+    if (IsContrastRatioValid(refined_contrast)) detail.contrast = refined_contrast;
+    return true;
+}
+
 bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
                                   DetectionResult& detail,
                                   ContrastPolarity polarity,
@@ -377,6 +571,20 @@ bool RefineBrightDefectGeometryAdaptive(const cv::Mat& gray_yolo,
     return RefineDefectGeometryAdaptive(
         gray_yolo, detail, ContrastPolarity::Bright,
         kMaxBrightRefinedBoxWidth, kMaxBrightRefinedBoxHeight, contrast_mode);
+}
+
+bool RefineDarkDefectGeometryMaskGuided(const cv::Mat& gray_yolo,
+                                        DetectionResult& detail,
+                                        ContrastCalculationMode contrast_mode) {
+    return RefineDefectGeometryMaskGuided(
+        gray_yolo, detail, ContrastPolarity::Dark, contrast_mode);
+}
+
+bool RefineBrightDefectGeometryMaskGuided(const cv::Mat& gray_yolo,
+                                          DetectionResult& detail,
+                                          ContrastCalculationMode contrast_mode) {
+    return RefineDefectGeometryMaskGuided(
+        gray_yolo, detail, ContrastPolarity::Bright, contrast_mode);
 }
 
 }  // namespace InspectionDLL::Internal

@@ -75,7 +75,7 @@ bool RefineYoloDetail(const cv::Mat& gray_yolo,
                       const YoloCategoryDefinition& category,
                       const InspectionConfig::CategoryFilterConfig& filter,
                       ContrastCalculationMode contrast_mode) {
-    if (filter.refinement_method != InspectionConfig::DefectRefinementMethod::GrayAdaptive) {
+    if (filter.refinement_method == InspectionConfig::DefectRefinementMethod::None) {
         return false;
     }
 
@@ -95,10 +95,14 @@ bool RefineYoloDetail(const cv::Mat& gray_yolo,
     }
 
     if (polarity == InspectionConfig::DefectRefinementPolarity::Dark) {
-        return RefineDarkDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
+        return filter.refinement_method == InspectionConfig::DefectRefinementMethod::MaskGuided
+                   ? RefineDarkDefectGeometryMaskGuided(gray_yolo, detail, contrast_mode)
+                   : RefineDarkDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
     }
     if (polarity == InspectionConfig::DefectRefinementPolarity::Bright) {
-        return RefineBrightDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
+        return filter.refinement_method == InspectionConfig::DefectRefinementMethod::MaskGuided
+                   ? RefineBrightDefectGeometryMaskGuided(gray_yolo, detail, contrast_mode)
+                   : RefineBrightDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
     }
     return false;
 }
