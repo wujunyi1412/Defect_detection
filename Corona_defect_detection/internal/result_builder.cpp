@@ -79,27 +79,27 @@ bool RefineYoloDetail(const cv::Mat& gray_yolo,
         return false;
     }
 
-    InspectionConfig::DefectRefinementPolarity polarity = filter.refinement_polarity;
-    if (polarity == InspectionConfig::DefectRefinementPolarity::Auto) {
+    InspectionConfig::DefectPolarity polarity = filter.defect_polarity;
+    if (polarity == InspectionConfig::DefectPolarity::Auto) {
         if (category.contrast_polarity == ContrastPolarity::Dark) {
-            polarity = InspectionConfig::DefectRefinementPolarity::Dark;
+            polarity = InspectionConfig::DefectPolarity::Dark;
         } else if (category.contrast_polarity == ContrastPolarity::Bright) {
-            polarity = InspectionConfig::DefectRefinementPolarity::Bright;
+            polarity = InspectionConfig::DefectPolarity::Bright;
         } else if (IsContrastRatioValid(detail.contrast)) {
             polarity = detail.contrast <= 1.0f
-                           ? InspectionConfig::DefectRefinementPolarity::Dark
-                           : InspectionConfig::DefectRefinementPolarity::Bright;
+                           ? InspectionConfig::DefectPolarity::Dark
+                           : InspectionConfig::DefectPolarity::Bright;
         } else {
             return false;
         }
     }
 
-    if (polarity == InspectionConfig::DefectRefinementPolarity::Dark) {
+    if (polarity == InspectionConfig::DefectPolarity::Dark) {
         return filter.refinement_method == InspectionConfig::DefectRefinementMethod::MaskGuided
                    ? RefineDarkDefectGeometryMaskGuided(gray_yolo, detail, contrast_mode)
                    : RefineDarkDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
     }
-    if (polarity == InspectionConfig::DefectRefinementPolarity::Bright) {
+    if (polarity == InspectionConfig::DefectPolarity::Bright) {
         return filter.refinement_method == InspectionConfig::DefectRefinementMethod::MaskGuided
                    ? RefineBrightDefectGeometryMaskGuided(gray_yolo, detail, contrast_mode)
                    : RefineBrightDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);

@@ -42,6 +42,14 @@ std::string ToLowerCopy(std::string value) {
     return value;
 }
 
+DefectPolarity ParseDefectPolarity(const std::string& configured_value) {
+    const std::string polarity = ToLowerCopy(TrimCopy(configured_value));
+    if (polarity == "auto") return DefectPolarity::Auto;
+    if (polarity == "dark") return DefectPolarity::Dark;
+    if (polarity == "bright") return DefectPolarity::Bright;
+    return DefectPolarity::Invalid;
+}
+
 std::string CanonicalYoloCategory(const std::string& category) {
     const std::string lowered = ToLowerCopy(TrimCopy(category));
     for (const auto& entry : kYoloCategorySections) {
@@ -147,25 +155,26 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
     } else {
         filter.contrast_direction = ContrastFilterDirection::Invalid;
     }
-    // Parse the legacy setting first, then let the new orthogonal settings
-    // override it. This keeps existing INI files behaviorally unchanged.
+    // Parse legacy refinement settings first, then let the unified settings
+    // override them. Legacy polarity is intentionally applied to both initial
+    // contrast and refinement so the two stages cannot disagree.
     std::string configured_mode;
     if (TryGetString(ini, section, "traditional_measure_mode", configured_mode)) {
         const std::string mode = ToLowerCopy(TrimCopy(configured_mode));
         if (mode == "dark") {
             filter.traditional_measure_mode = TraditionalMeasureMode::Dark;
             filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
-            filter.refinement_polarity = DefectRefinementPolarity::Dark;
+            filter.defect_polarity = DefectPolarity::Dark;
         } else if (mode == "bright") {
             filter.traditional_measure_mode = TraditionalMeasureMode::Bright;
             filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
-            filter.refinement_polarity = DefectRefinementPolarity::Bright;
+            filter.defect_polarity = DefectPolarity::Bright;
         }
     } else if (GetBoolOr(ini, section, "use_traditional_measure", false)) {
         // Backward compatibility: the legacy boolean only supported dark defects.
         filter.traditional_measure_mode = TraditionalMeasureMode::Dark;
         filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
-        filter.refinement_polarity = DefectRefinementPolarity::Dark;
+        filter.defect_polarity = DefectPolarity::Dark;
     }
 
     std::string configured_refinement_method;
@@ -184,16 +193,14 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
 
     std::string configured_refinement_polarity;
     if (TryGetString(ini, section, "refinement_polarity", configured_refinement_polarity)) {
-        const std::string polarity = ToLowerCopy(TrimCopy(configured_refinement_polarity));
-        if (polarity == "auto") {
-            filter.refinement_polarity = DefectRefinementPolarity::Auto;
-        } else if (polarity == "dark") {
-            filter.refinement_polarity = DefectRefinementPolarity::Dark;
-        } else if (polarity == "bright") {
-            filter.refinement_polarity = DefectRefinementPolarity::Bright;
-        } else {
-            filter.refinement_polarity = DefectRefinementPolarity::Invalid;
-        }
+        filter.defect_polarity = ParseDefectPolarity(configured_refinement_polarity);
+    }
+
+    std::string configured_defect_polarity;
+    if (TryGetString(ini, section, "defect_polarity", configured_defect_polarity)) {
+        // The unified setting is parsed last and therefore wins over every
+        // legacy polarity source.
+        filter.defect_polarity = ParseDefectPolarity(configured_defect_polarity);
     }
     return filter;
 }
@@ -301,8 +308,8 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
             err = prefix + "refinement_method must be none, gray_adaptive, or mask_guided";
             return false;
         }
-        if (filter.refinement_polarity == DefectRefinementPolarity::Invalid) {
-            err = prefix + "refinement_polarity must be auto, dark, or bright";
+        if (filter.defect_polarity == DefectPolarity::Invalid) {
+            err = prefix + "defect_polarity must be auto, dark, or bright";
             return false;
         }
         if (filter.contrast_direction == ContrastFilterDirection::Invalid) {

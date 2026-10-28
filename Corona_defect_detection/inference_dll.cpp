@@ -256,7 +256,8 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
         Internal::YoloDerived yolo;
         if (yolo_success) {
             yolo = Internal::AnalyzeYolo(
-                yolo_detections, images.yolo_gray, pImpl->contrast_mode_);
+                yolo_detections, images.yolo_gray, pImpl->contrast_mode_,
+                &pImpl->category_filters_);
         }
         timing.yolo_post_ms = postprocess_timer.RestartMilliseconds();
 

@@ -243,7 +243,8 @@ int TestCombinedInferencePreprocessingMatchesLegacyPath() {
 
 int TestYoloPostprocessReusesBinaryMask() {
     cv::Mat gray(80, 80, CV_8U, cv::Scalar(100));
-    gray(cv::Rect(20, 20, 20, 20)).setTo(50);
+    gray(cv::Rect(20, 20, 10, 20)).setTo(50);
+    gray(cv::Rect(30, 20, 10, 20)).setTo(200);
 
     YOLO::Detection detection{};
     detection.class_id = 2;
@@ -265,6 +266,19 @@ int TestYoloPostprocessReusesBinaryMask() {
                    "YOLO postprocess should share the existing binary mask")) return 1;
     if (AssertTrue(cv::norm(result.details[0].mask, detection.mask, cv::NORM_INF) == 0.0,
                    "shared YOLO mask contents should remain unchanged")) return 1;
+    if (AssertTrue(result.details[0].contrast < 1.0f,
+                   "default Stain polarity should calculate dark foreground contrast")) return 1;
+
+    InspectionConfig::CategoryFilterMap filters = InspectionConfig::DefaultCategoryFilters();
+    filters.at("Stain").defect_polarity = InspectionConfig::DefectPolarity::Bright;
+    const InspectionDLL::Internal::YoloDerived bright_result =
+        InspectionDLL::Internal::AnalyzeYolo(
+            {detection}, gray,
+            InspectionDLL::Internal::ContrastCalculationMode::AdaptiveLocalPlane,
+            &filters);
+    if (AssertTrue(bright_result.details.size() == 1 &&
+                       bright_result.details[0].contrast > 1.0f,
+                   "configured defect_polarity should control initial YOLO contrast")) return 1;
     return 0;
 }
 
@@ -517,7 +531,8 @@ int TestAaConfigParsing() {
                << "[Stain_config]\n"
                << "traditional_measure_mode=dark\n"
                << "refinement_method=gray_adaptive\n"
-               << "refinement_polarity=auto\n"
+               << "refinement_polarity=bright\n"
+               << "defect_polarity=auto\n"
                << "contrast_threshold_1=0.8\n"
                << "contrast_threshold_2=0.9\n"
                << "contrast_direction=less_equal\n"
@@ -536,7 +551,7 @@ int TestAaConfigParsing() {
                << "[BrightStripes_config]\n"
                << "traditional_measure_mode=bright\n"
                << "refinement_method=mask_guided\n"
-               << "refinement_polarity=bright\n"
+               << "defect_polarity=bright\n"
                << "[Decolorization_config]\n"
                << "use_traditional_measure=1\n";
     }
@@ -606,9 +621,8 @@ int TestAaConfigParsing() {
     const auto& stain_filter = config.category_filters.at("Stain");
     if (AssertTrue(stain_filter.refinement_method ==
                        InspectionConfig::DefectRefinementMethod::GrayAdaptive &&
-                       stain_filter.refinement_polarity ==
-                       InspectionConfig::DefectRefinementPolarity::Auto,
-                   "new refinement method and polarity should override legacy mapping")) return 1;
+                       stain_filter.defect_polarity == InspectionConfig::DefectPolarity::Auto,
+                   "defect_polarity should override the legacy polarity")) return 1;
     if (AssertTrue(stain_filter.contrast_threshold_1 == 0.8f &&
                        stain_filter.contrast_threshold_2 == 0.9f &&
                        stain_filter.contrast_direction ==
@@ -627,15 +641,17 @@ int TestAaConfigParsing() {
                        InspectionConfig::TraditionalMeasureMode::Bright,
                     "bright refinement should be configuration-driven")) return 1;
     if (AssertTrue(config.category_filters.at("BrightStripes").refinement_method ==
-                       InspectionConfig::DefectRefinementMethod::MaskGuided,
-                   "mask-guided refinement method should be parsed")) return 1;
+                       InspectionConfig::DefectRefinementMethod::MaskGuided &&
+                       config.category_filters.at("BrightStripes").defect_polarity ==
+                       InspectionConfig::DefectPolarity::Bright,
+                   "mask-guided refinement method and unified polarity should be parsed")) return 1;
     if (AssertTrue(config.category_filters.at("Decolorization").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::Dark,
                     "legacy traditional measurement should map to dark refinement")) return 1;
     if (AssertTrue(config.category_filters.at("Decolorization").refinement_method ==
                        InspectionConfig::DefectRefinementMethod::GrayAdaptive &&
-                       config.category_filters.at("Decolorization").refinement_polarity ==
-                       InspectionConfig::DefectRefinementPolarity::Dark,
+                       config.category_filters.at("Decolorization").defect_polarity ==
+                       InspectionConfig::DefectPolarity::Dark,
                    "legacy boolean should map to gray-adaptive dark refinement")) return 1;
     if (AssertTrue(config.category_filters.at("Glue_overflow").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::None,

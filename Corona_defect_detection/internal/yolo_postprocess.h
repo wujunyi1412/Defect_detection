@@ -5,6 +5,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "../inference_dll.h"
+#include "config.h"
 #include "yolo_inference.h"
 #include "image_utils.h"
 
@@ -19,6 +20,7 @@ struct YoloDerived {
 YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
                         const cv::Mat& gray_yolo,
                         ContrastCalculationMode contrast_mode =
-                            ContrastCalculationMode::AdaptiveLocalPlane);
+                            ContrastCalculationMode::AdaptiveLocalPlane,
+                        const InspectionConfig::CategoryFilterMap* category_filters = nullptr);
 
 }  // namespace InspectionDLL::Internal

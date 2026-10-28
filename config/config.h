@@ -22,12 +22,15 @@ enum class DefectRefinementMethod {
     Invalid,
 };
 
-enum class DefectRefinementPolarity {
+enum class DefectPolarity {
     Auto,
     Dark,
     Bright,
     Invalid,
 };
+
+// Type-name compatibility for code built during the transition.
+using DefectRefinementPolarity = DefectPolarity;
 
 enum class ContrastFilterDirection {
     LessEqual,
@@ -58,9 +61,9 @@ struct CategoryFilterConfig {
     int min_area_2 = 0;
     int min_area = 0;
     DefectRefinementMethod refinement_method = DefectRefinementMethod::None;
-    DefectRefinementPolarity refinement_polarity = DefectRefinementPolarity::Auto;
+    DefectPolarity defect_polarity = DefectPolarity::Auto;
     // Deprecated compatibility field. New code should use refinement_method
-    // and refinement_polarity.
+    // and defect_polarity.
     TraditionalMeasureMode traditional_measure_mode = TraditionalMeasureMode::None;
 };
 

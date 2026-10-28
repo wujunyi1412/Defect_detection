@@ -11,7 +11,8 @@ namespace InspectionDLL::Internal {
 
 YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
                         const cv::Mat& gray_yolo,
-                        ContrastCalculationMode contrast_mode) {
+                        ContrastCalculationMode contrast_mode,
+                        const InspectionConfig::CategoryFilterMap* category_filters) {
     YoloDerived result;
     result.has_detections = false;
     result.score = 0.0f;
@@ -65,9 +66,26 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
             detail.area = 1;
         }
 
+        ContrastPolarity contrast_polarity = category->contrast_polarity;
+        if (category_filters) {
+            const auto filter_it = category_filters->find(category->name);
+            if (filter_it != category_filters->end()) {
+                switch (filter_it->second.defect_polarity) {
+                    case InspectionConfig::DefectPolarity::Dark:
+                        contrast_polarity = ContrastPolarity::Dark;
+                        break;
+                    case InspectionConfig::DefectPolarity::Bright:
+                        contrast_polarity = ContrastPolarity::Bright;
+                        break;
+                    case InspectionConfig::DefectPolarity::Auto:
+                    case InspectionConfig::DefectPolarity::Invalid:
+                        break;
+                }
+            }
+        }
         detail.contrast = CalculateContrastRatioByMode(
             gray_yolo, mask_uint8, x1i, y1i, bbox_w, bbox_h,
-            category->contrast_polarity, contrast_mode);
+            contrast_polarity, contrast_mode);
 
         result.details.push_back(detail);
     }
