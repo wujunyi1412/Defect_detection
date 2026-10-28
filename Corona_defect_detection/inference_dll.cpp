@@ -144,7 +144,13 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
             config.yolo_nms_class_aware ? YOLO::YOLOv8Segmentor::NmsMode::ClassAware : YOLO::YOLOv8Segmentor::NmsMode::Global
         );
 
-        if (!pImpl->yolo_detector.Initialize(config.yolo_model_path, config.yolo_score_threshold, config.yolo_iou_threshold, {640, 640}, config.ort_intra_threads)) {
+        if (!pImpl->yolo_detector.Initialize(
+                config.yolo_model_path,
+                config.yolo_score_threshold,
+                config.yolo_iou_threshold,
+                {640, 640},
+                config.ort_intra_threads,
+                config.yolo_mask_threshold)) {
             pImpl->SetLastError("failed to initialize YOLO detector");
             return false;
         }

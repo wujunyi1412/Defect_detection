@@ -150,10 +150,12 @@ bool YOLOv8Segmentor::Initialize(
     float score_threshold,
     float iou_threshold,
     const std::vector<int>& img_size,
-    int ort_intra_threads) {
+    int ort_intra_threads,
+    float mask_threshold) {
     
     score_threshold_ = score_threshold;
     iou_threshold_ = iou_threshold;
+    mask_threshold_ = std::clamp(mask_threshold, 0.0f, 1.0f);
     img_size_ = img_size;
 
     try {
@@ -430,7 +432,7 @@ void YOLOv8Segmentor::Postprocess(
 
         cv::Mat mask_orig_f;
         cv::resize(mask_unpad, mask_orig_f, original_img.size(), 0, 0, cv::INTER_LINEAR);
-        det.mask = mask_orig_f > 0.25f;
+        det.mask = mask_orig_f > mask_threshold_;
         detections.push_back(det);
     }
 }

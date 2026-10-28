@@ -29,7 +29,8 @@ public:
         float score_threshold = 0.25f,
         float iou_threshold = 0.2f,
         const std::vector<int>& img_size = {640, 640},
-        int ort_intra_threads = 4
+        int ort_intra_threads = 4,
+        float mask_threshold = 0.25f
     );
 
     bool Infer(const cv::Mat& image,
@@ -60,6 +61,7 @@ private:
     std::vector<int> img_size_;
     float score_threshold_;
     float iou_threshold_;
+    float mask_threshold_ = 0.25f;
     NmsMode nms_mode_ = NmsMode::Global;
 
     static constexpr int NUM_CLASSES = 10;

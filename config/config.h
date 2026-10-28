@@ -133,6 +133,7 @@ struct InspectionConfigData {
     std::string faiss_index_path;
     std::string metadata_path;
     float yolo_score_threshold = 0.25f;
+    float yolo_mask_threshold = 0.25f;
     float yolo_iou_threshold = 0.2f;
     bool yolo_nms_class_aware = false;
     int ort_intra_threads = 4;

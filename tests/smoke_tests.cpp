@@ -172,6 +172,32 @@ int TestMaskGuidedDefectRefinement() {
                    "mask-guided refinement should recover the supported defect boundary")) return 1;
     if (AssertTrue(detail.x + detail.w < 39.0f && detail.y + detail.h < 39.0f,
                    "mask-guided refinement should reject a distant stronger distractor")) return 1;
+
+    cv::Mat halo_gray(80, 80, CV_8U, cv::Scalar(100));
+    halo_gray(cv::Rect(27, 27, 11, 11)).setTo(112);
+    halo_gray(cv::Rect(30, 30, 5, 5)).setTo(180);
+    cv::Mat broad_mask(halo_gray.size(), CV_8U, cv::Scalar(0));
+    broad_mask(cv::Rect(26, 26, 13, 13)).setTo(255);
+
+    InspectionDLL::DetectionResult broad_detail;
+    broad_detail.name = "Bright_clusters";
+    broad_detail.x = 24.0f;
+    broad_detail.y = 24.0f;
+    broad_detail.w = 18.0f;
+    broad_detail.h = 18.0f;
+    broad_detail.area = 169;
+    broad_detail.score = 0.9f;
+    broad_detail.mask = broad_mask;
+
+    const bool broad_refined = InspectionDLL::Internal::RefineBrightDefectGeometryMaskGuided(
+        halo_gray, broad_detail,
+        InspectionDLL::Internal::ContrastCalculationMode::AdaptiveLocalPlane);
+    if (AssertTrue(broad_refined, "broad YOLO mask should still be refined")) return 1;
+    if (AssertTrue(broad_detail.x >= 29.0f && broad_detail.x <= 31.0f &&
+                       broad_detail.y >= 29.0f && broad_detail.y <= 31.0f &&
+                       broad_detail.w <= 7.0f && broad_detail.h <= 7.0f &&
+                       broad_detail.area <= 35,
+                   "relative response threshold should trim a weak halo from a broad mask")) return 1;
     return 0;
 }
 
@@ -495,6 +521,7 @@ int TestAaConfigParsing() {
         std::ofstream stream(config_path);
         stream << "[yolo]\n"
                << "enabled=0\n"
+               << "mask_threshold=0.45\n"
                << "[patchcore]\n"
                << "enabled=0\n"
                << "[post]\n"
@@ -563,6 +590,8 @@ int TestAaConfigParsing() {
     std::filesystem::remove(config_path, remove_error);
 
     if (AssertTrue(loaded, "AA config should load: " + error)) return 1;
+    if (AssertTrue(config.yolo_mask_threshold == 0.45f,
+                   "YOLO mask threshold should be parsed")) return 1;
     if (AssertTrue(config.patchcore_yolo_iou_threshold == 0.25f,
                    "PatchCore/YOLO IoU threshold should be parsed")) return 1;
     if (AssertTrue(config.contrast_mode == 2,

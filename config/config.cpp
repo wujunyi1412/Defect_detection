@@ -282,6 +282,10 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         err = "yolo.iou_threshold must be in [0, 1]";
         return false;
     }
+    if (out.yolo_mask_threshold < 0.0f || out.yolo_mask_threshold > 1.0f) {
+        err = "yolo.mask_threshold must be in [0, 1]";
+        return false;
+    }
     if (!ValidateNonNegative(out.yolo_score_threshold, "yolo.score_threshold", err)) return false;
     if (!ValidateNonNegative(out.patchcore_score_threshold, "patchcore.score_threshold", err)) return false;
     if (!ValidateNonNegative(out.patchcore_area_threshold, "patchcore.area_threshold", err)) return false;
@@ -472,6 +476,7 @@ bool LoadInspectionConfig(const std::string& config_path, InspectionConfigData& 
     if (!out.metadata_path.empty()) out.metadata_path = ResolvePathRelativeToIni(config_path, out.metadata_path);
 
     out.yolo_score_threshold = GetFloatOr(ini, "yolo", "score_threshold", out.yolo_score_threshold);
+    out.yolo_mask_threshold = GetFloatOr(ini, "yolo", "mask_threshold", out.yolo_mask_threshold);
     out.yolo_iou_threshold = GetFloatOr(ini, "yolo", "iou_threshold", out.yolo_iou_threshold);
     out.yolo_nms_class_aware = GetBoolOr(ini, "yolo", "nms_class_aware", out.yolo_nms_class_aware);
     out.ort_intra_threads = GetIntOr(ini, "ort", "intra_threads", out.ort_intra_threads);

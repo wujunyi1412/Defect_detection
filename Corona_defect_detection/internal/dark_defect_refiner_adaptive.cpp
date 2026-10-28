@@ -311,20 +311,40 @@ bool RefineDefectGeometryMaskGuided(const cv::Mat& gray_yolo,
     cv::max(global_response, 0.0, global_response);
     const cv::Mat response = global_response(search);
 
-    const double seed_threshold = std::max(2.0, 2.5 * noise_sigma);
+    std::vector<float> guided_responses;
+    guided_responses.reserve(static_cast<size_t>(yolo_area));
+    const cv::Mat yolo_mask_search = yolo_mask_context(search);
+    const cv::Mat border_black_search = image_border_black(search);
+    for (int y = 0; y < response.rows; ++y) {
+        const float* response_row = response.ptr<float>(y);
+        const uchar* mask_row = yolo_mask_search.ptr<uchar>(y);
+        const uchar* black_row = border_black_search.ptr<uchar>(y);
+        for (int x = 0; x < response.cols; ++x) {
+            if (mask_row[x] && !black_row[x] && std::isfinite(response_row[x])) {
+                guided_responses.push_back(response_row[x]);
+            }
+        }
+    }
+    if (guided_responses.empty()) return false;
+
+    // A broad YOLO mask often contains a weak halo. Use the high-response part
+    // of the mask to set relative thresholds, while retaining noise-based floors
+    // for low-contrast defects.
+    const double response_reference = Percentile(guided_responses, 90.0f);
+    const double seed_threshold = std::max(
+        std::max(2.0, 2.5 * noise_sigma), 0.50 * response_reference);
     const double grow_threshold = std::max(
-        1.5, std::max(seed_threshold * 0.60, 1.50 * noise_sigma));
+        std::max(1.5, 1.50 * noise_sigma), 0.30 * response_reference);
     cv::Mat seed_mask;
     cv::Mat grow_mask;
     cv::compare(response, seed_threshold, seed_mask, cv::CMP_GE);
     cv::compare(response, grow_threshold, grow_mask, cv::CMP_GE);
 
-    const cv::Mat yolo_mask_search = yolo_mask_context(search);
     cv::bitwise_and(seed_mask, yolo_mask_search, seed_mask);
     if (cv::countNonZero(seed_mask) == 0) return false;
 
     const int growth_radius = std::clamp(
-        static_cast<int>(std::round(equivalent_radius * 0.60)), 2, 12);
+        static_cast<int>(std::round(equivalent_radius * 0.35)), 2, 8);
     const cv::Mat growth_kernel = cv::getStructuringElement(
         cv::MORPH_ELLIPSE, cv::Size(2 * growth_radius + 1, 2 * growth_radius + 1));
     cv::Mat allowed_region;
@@ -332,12 +352,6 @@ bool RefineDefectGeometryMaskGuided(const cv::Mat& gray_yolo,
     cv::bitwise_and(grow_mask, allowed_region(search), grow_mask);
     grow_mask.setTo(0, image_border_black(search));
     seed_mask.setTo(0, image_border_black(search));
-
-    const cv::Mat close_kernel = cv::getStructuringElement(
-        cv::MORPH_ELLIPSE, cv::Size(3, 3));
-    cv::morphologyEx(grow_mask, grow_mask, cv::MORPH_CLOSE, close_kernel);
-    cv::bitwise_and(grow_mask, allowed_region(search), grow_mask);
-    grow_mask.setTo(0, image_border_black(search));
 
     cv::Mat labels;
     cv::Mat stats;
