@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "aa_yolo_filter.h"
 #include "dark_defect_refiner.h"
@@ -94,15 +95,42 @@ bool RefineYoloDetail(const cv::Mat& gray_yolo,
         }
     }
 
-    if (polarity == InspectionConfig::DefectPolarity::Dark) {
-        return filter.refinement_method == InspectionConfig::DefectRefinementMethod::MaskGuided
-                   ? RefineDarkDefectGeometryMaskGuided(gray_yolo, detail, contrast_mode)
-                   : RefineDarkDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
+    const auto refine_mask_guided = [&](DetectionResult& candidate) {
+        return polarity == InspectionConfig::DefectPolarity::Dark
+                   ? RefineDarkDefectGeometryMaskGuided(gray_yolo, candidate, contrast_mode)
+                   : RefineBrightDefectGeometryMaskGuided(gray_yolo, candidate, contrast_mode);
+    };
+    const auto refine_gray_adaptive = [&](DetectionResult& candidate) {
+        return polarity == InspectionConfig::DefectPolarity::Dark
+                   ? RefineDarkDefectGeometryAdaptive(gray_yolo, candidate, contrast_mode)
+                   : RefineBrightDefectGeometryAdaptive(gray_yolo, candidate, contrast_mode);
+    };
+
+    if (polarity != InspectionConfig::DefectPolarity::Dark &&
+        polarity != InspectionConfig::DefectPolarity::Bright) {
+        return false;
     }
-    if (polarity == InspectionConfig::DefectPolarity::Bright) {
-        return filter.refinement_method == InspectionConfig::DefectRefinementMethod::MaskGuided
-                   ? RefineBrightDefectGeometryMaskGuided(gray_yolo, detail, contrast_mode)
-                   : RefineBrightDefectGeometryAdaptive(gray_yolo, detail, contrast_mode);
+
+    if (filter.refinement_method == InspectionConfig::DefectRefinementMethod::MaskGuided) {
+        return refine_mask_guided(detail);
+    }
+    if (filter.refinement_method == InspectionConfig::DefectRefinementMethod::GrayAdaptive) {
+        return refine_gray_adaptive(detail);
+    }
+    if (filter.refinement_method == InspectionConfig::DefectRefinementMethod::HybridCascade) {
+        // Run each stage from the untouched YOLO result. A failed refiner is not
+        // allowed to leak partial geometry into the fallback stage.
+        DetectionResult mask_candidate = detail;
+        if (refine_mask_guided(mask_candidate)) {
+            detail = std::move(mask_candidate);
+            return true;
+        }
+
+        DetectionResult adaptive_candidate = detail;
+        if (refine_gray_adaptive(adaptive_candidate)) {
+            detail = std::move(adaptive_candidate);
+            return true;
+        }
     }
     return false;
 }

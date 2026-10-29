@@ -14,11 +14,13 @@ enum class TraditionalMeasureMode {
 
 // Selects the geometry-refinement algorithm independently from defect polarity.
 // MaskGuided uses the YOLO mask as a spatial prior and image residuals to refine
-// the final foreground boundary.
+// the final foreground boundary. HybridCascade tries MaskGuided first, falls
+// back to GrayAdaptive, and finally keeps the original YOLO result.
 enum class DefectRefinementMethod {
     None,
     GrayAdaptive,
     MaskGuided,
+    HybridCascade,
     Invalid,
 };
 

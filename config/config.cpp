@@ -186,6 +186,8 @@ CategoryFilterConfig LoadCategoryFilter(const IniData& ini, const std::string& s
             filter.refinement_method = DefectRefinementMethod::GrayAdaptive;
         } else if (method == "mask_guided") {
             filter.refinement_method = DefectRefinementMethod::MaskGuided;
+        } else if (method == "hybrid_cascade") {
+            filter.refinement_method = DefectRefinementMethod::HybridCascade;
         } else {
             filter.refinement_method = DefectRefinementMethod::Invalid;
         }
@@ -309,7 +311,8 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
     for (const auto& [category, filter] : out.category_filters) {
         const std::string prefix = category + ".";
         if (filter.refinement_method == DefectRefinementMethod::Invalid) {
-            err = prefix + "refinement_method must be none, gray_adaptive, or mask_guided";
+            err = prefix +
+                  "refinement_method must be none, gray_adaptive, mask_guided, or hybrid_cascade";
             return false;
         }
         if (filter.defect_polarity == DefectPolarity::Invalid) {

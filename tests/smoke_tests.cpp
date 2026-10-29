@@ -201,6 +201,55 @@ int TestMaskGuidedDefectRefinement() {
     return 0;
 }
 
+int TestHybridCascadeFallsBackToGrayAdaptive() {
+    cv::Mat gray(80, 80, CV_8U, cv::Scalar(100));
+    gray(cv::Rect(28, 29, 7, 5)).setTo(220);
+
+    InspectionDLL::DetectionResult detail;
+    detail.name = "Bright_clusters";
+    detail.x = 25.0f;
+    detail.y = 25.0f;
+    detail.w = 18.0f;
+    detail.h = 18.0f;
+    detail.area = 324;
+    detail.score = 0.9f;
+    // An empty mask makes the first cascade stage fail deterministically.
+    detail.mask = cv::Mat();
+
+    InspectionDLL::Internal::YoloDerived yolo;
+    yolo.has_detections = true;
+    yolo.score = detail.score;
+    yolo.details.push_back(detail);
+
+    InspectionDLL::Internal::PatchCoreDerived patchcore;
+    InspectionDLL::Internal::ResultComposeContext context;
+    context.aa_filter.enable = false;
+    context.iqt_filter.enable = false;
+    context.abnormal_filter.enable = false;
+    auto& filter = context.category_filters.at("Bright_clusters");
+    filter.refinement_method = InspectionConfig::DefectRefinementMethod::HybridCascade;
+    filter.defect_polarity = InspectionConfig::DefectPolarity::Bright;
+    filter.confidence_threshold = 0.0f;
+    filter.contrast_threshold = 0.0f;
+    filter.contrast_threshold_1 = 0.0f;
+    filter.contrast_threshold_2 = 0.0f;
+
+    InspectionDLL::InferenceResult output;
+    InspectionDLL::Internal::ComposeOutputWithDefectFilter(
+        patchcore, yolo, gray.size(), gray, gray, output, context);
+
+    if (AssertTrue(output.details.size() == 1,
+                   "hybrid cascade should preserve the YOLO detection")) return 1;
+    const auto& refined = output.details.front();
+    if (AssertTrue(refined.x >= 27.0f && refined.x <= 29.0f &&
+                       refined.y >= 28.0f && refined.y <= 30.0f &&
+                       refined.w >= 6.0f && refined.w <= 8.0f &&
+                       refined.h >= 4.0f && refined.h <= 6.0f &&
+                       refined.area >= 28 && refined.area <= 42,
+                   "hybrid cascade should fall back to gray-adaptive refinement")) return 1;
+    return 0;
+}
+
 int TestDefectBoxExpansionClipsToImage() {
     const cv::Size image_size(20, 15);
     const cv::Rect centered = InspectionOverlay::ExpandDefectRectForTest(
@@ -579,6 +628,9 @@ int TestAaConfigParsing() {
                << "traditional_measure_mode=bright\n"
                << "refinement_method=mask_guided\n"
                << "defect_polarity=bright\n"
+               << "[Bright_clusters_config]\n"
+               << "refinement_method=hybrid_cascade\n"
+               << "defect_polarity=bright\n"
                << "[Decolorization_config]\n"
                << "use_traditional_measure=1\n";
     }
@@ -674,6 +726,11 @@ int TestAaConfigParsing() {
                        config.category_filters.at("BrightStripes").defect_polarity ==
                        InspectionConfig::DefectPolarity::Bright,
                    "mask-guided refinement method and unified polarity should be parsed")) return 1;
+    if (AssertTrue(config.category_filters.at("Bright_clusters").refinement_method ==
+                       InspectionConfig::DefectRefinementMethod::HybridCascade &&
+                       config.category_filters.at("Bright_clusters").defect_polarity ==
+                       InspectionConfig::DefectPolarity::Bright,
+                   "hybrid-cascade refinement method should be parsed")) return 1;
     if (AssertTrue(config.category_filters.at("Decolorization").traditional_measure_mode ==
                        InspectionConfig::TraditionalMeasureMode::Dark,
                     "legacy traditional measurement should map to dark refinement")) return 1;
@@ -1077,6 +1134,7 @@ int main() {
     if (TestConfigDefaults()) return 1;
     if (TestBrightDefectRefinement()) return 1;
     if (TestMaskGuidedDefectRefinement()) return 1;
+    if (TestHybridCascadeFallsBackToGrayAdaptive()) return 1;
     if (TestAaYoloFilterRules()) return 1;
     if (TestIqtYoloFilterRules()) return 1;
     if (TestAaConfigParsing()) return 1;
