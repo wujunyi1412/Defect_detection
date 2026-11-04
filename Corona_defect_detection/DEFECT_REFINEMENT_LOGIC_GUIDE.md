@@ -30,7 +30,7 @@ YOLO 首先提供：
 refinement_method=none             # 不细化
 refinement_method=gray_adaptive    # 当前灰度自适应细化算法
 refinement_method=mask_guided      # YOLO Mask 引导的灰度边界细化
-refinement_method=hybrid_cascade   # 优先 Mask 引导，失败时回退到灰度自适应
+refinement_method=hybrid_cascade   # 同时运行两路；一致时融合，冲突时自适应择优
 defect_polarity=auto               # 根据类别定义或已有对比度判断极性
 defect_polarity=dark               # 暗缺陷：统一控制初始对比度和细化
 defect_polarity=bright             # 亮缺陷：统一控制初始对比度和细化
@@ -102,7 +102,7 @@ YOLO 检测结果
   ├─ none          → 不细化
   ├─ gray_adaptive → 根据 defect_polarity 做当前框内灰度自适应细化
   ├─ mask_guided   → 根据 defect_polarity 做 YOLO Mask 引导细化
-  └─ hybrid_cascade → 先做 mask_guided，失败时从原始 YOLO 结果执行 gray_adaptive
+  └─ hybrid_cascade → 两路均从原始 YOLO 结果运行；边界一致时加权融合，冲突时按证据择优
   ↓
 细化成功：更新框、面积、Mask 和对比度
 细化失败：完整保留原始 YOLO 结果
