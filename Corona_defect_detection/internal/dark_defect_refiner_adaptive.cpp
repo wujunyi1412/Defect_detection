@@ -400,12 +400,21 @@ bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
                                   ContrastPolarity polarity,
                                   int max_box_width,
                                   int max_box_height,
-                                  ContrastCalculationMode contrast_mode) {
+                                  ContrastCalculationMode contrast_mode,
+                                  bool use_soft_mask_prior = false) {
     if (gray_yolo.empty() || gray_yolo.channels() != 1) return false;
 
     // 计算检测框的坐标和宽高，确保其在图像内
     const cv::Rect detection = ClampDetectionRect(detail, gray_yolo.size());
     if (detection.empty()) return false;
+
+    // V2 never uses the YOLO mask as a hard search boundary. It is only a soft
+    // component-ranking prior and is ignored automatically when unsupported by
+    // the grayscale response.
+    const cv::Mat local_yolo_mask = use_soft_mask_prior
+                                        ? BuildLocalDetectionMask(
+                                              detail.mask, detection, gray_yolo.size())
+                                        : cv::Mat();
 
     // 可以二次处理的最大检测框边长
     if (detection.width > max_box_width || detection.height > max_box_height) {
@@ -485,17 +494,38 @@ bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
 
     double max_response = 0.0;
     cv::minMaxLoc(response, nullptr, &max_response);
-    const double seed_threshold = std::max(2.0, 2.5 * noise_sigma);
-    if (max_response < seed_threshold) return false;
+    const double base_seed_threshold = std::max(2.0, 2.5 * noise_sigma);
+    if (max_response < base_seed_threshold) return false;
+
+    double response_reference = 0.0;
+    if (use_soft_mask_prior) {
+        std::vector<float> response_values;
+        response_values.reserve(response.total());
+        for (int y = 0; y < response.rows; ++y) {
+            const float* row = response.ptr<float>(y);
+            for (int x = 0; x < response.cols; ++x) {
+                if (std::isfinite(row[x]) && row[x] > 0.0f) response_values.push_back(row[x]);
+            }
+        }
+        if (!response_values.empty()) response_reference = Percentile(response_values, 90.0f);
+    }
+    const double seed_threshold = use_soft_mask_prior
+                                      ? std::max(base_seed_threshold, 0.45 * response_reference)
+                                      : base_seed_threshold;
 
     // Hysteresis keeps weak edges belonging to a strong stain while rejecting
     // isolated low-contrast background fluctuations.
     const bool is_small_detection = short_side <= 30;
-    const double grow_threshold = is_small_detection
-                                      ? std::max(1.5, std::max(seed_threshold * 0.65,
-                                                               1.75 * noise_sigma))
-                                      : std::max(1.0, std::min(seed_threshold * 0.55,
-                                                               1.25 * noise_sigma));
+    const double base_grow_threshold = is_small_detection
+                                           ? std::max(1.5, std::max(base_seed_threshold * 0.65,
+                                                                    1.75 * noise_sigma))
+                                           : std::max(1.0, std::min(base_seed_threshold * 0.55,
+                                                                    1.25 * noise_sigma));
+    const double grow_threshold = use_soft_mask_prior
+                                      ? std::min(seed_threshold * 0.75,
+                                                 std::max(base_grow_threshold,
+                                                          0.25 * response_reference))
+                                      : base_grow_threshold;
     cv::Mat seed_mask;
     cv::Mat grow_mask;
     cv::compare(response, seed_threshold, seed_mask, cv::CMP_GE);
@@ -519,6 +549,35 @@ bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
 
     const cv::Point2d detection_center((search.width - 1) * 0.5, (search.height - 1) * 0.5);
     const double center_scale = std::max(1.0, std::hypot(search.width, search.height));
+    cv::Mat near_yolo_mask;
+    int yolo_area = 0;
+    double mask_prior_reliability = 0.0;
+    if (!local_yolo_mask.empty()) {
+        yolo_area = cv::countNonZero(local_yolo_mask);
+        if (yolo_area > 0) {
+            const cv::Mat prior_kernel = cv::getStructuringElement(
+                cv::MORPH_ELLIPSE, cv::Size(5, 5));
+            cv::dilate(local_yolo_mask, near_yolo_mask, prior_kernel);
+
+            std::vector<float> mask_responses;
+            mask_responses.reserve(static_cast<size_t>(yolo_area));
+            for (int y = 0; y < response.rows; ++y) {
+                const float* response_row = response.ptr<float>(y);
+                const uchar* mask_row = local_yolo_mask.ptr<uchar>(y);
+                for (int x = 0; x < response.cols; ++x) {
+                    if (mask_row[x] && std::isfinite(response_row[x])) {
+                        mask_responses.push_back(response_row[x]);
+                    }
+                }
+            }
+            if (!mask_responses.empty()) {
+                const double mask_reference = Percentile(mask_responses, 80.0f);
+                const double threshold_span = std::max(1.0, seed_threshold - grow_threshold);
+                mask_prior_reliability = std::clamp(
+                    (mask_reference - grow_threshold) / threshold_span, 0.0, 1.0);
+            }
+        }
+    }
     double best_score = -std::numeric_limits<double>::infinity();
     int best_label = -1;
 
@@ -538,8 +597,26 @@ bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
         const cv::Point2d center(centroids.at<double>(label, 0), centroids.at<double>(label, 1));
         const double center_distance = cv::norm(center - detection_center) / center_scale;
         const double seed_fraction = static_cast<double>(seed_overlap) / area;
+        double mask_bonus = 0.0;
+        if (mask_prior_reliability > 0.0) {
+            const int mask_overlap = cv::countNonZero(
+                local_yolo_mask(component) & component_mask);
+            const int near_overlap = cv::countNonZero(
+                near_yolo_mask(component) & component_mask);
+            const double overlap_fraction = static_cast<double>(mask_overlap) / area;
+            const double near_fraction = static_cast<double>(near_overlap) / area;
+            const double mask_coverage = static_cast<double>(mask_overlap) /
+                                         std::max(1, yolo_area);
+            // The prior can break a close grayscale tie, but its bounded scale
+            // cannot rescue a weak component merely because the model mask says so.
+            const double bonus_scale = std::min(4.0, 1.0 + 0.20 * mean_response);
+            mask_bonus = mask_prior_reliability * bonus_scale *
+                         (1.5 * overlap_fraction + 0.75 * near_fraction +
+                          0.50 * std::min(1.0, mask_coverage));
+        }
         const double score = mean_response + 8.0 * seed_fraction + 3.0 * fill +
-                             2.0 * std::log1p(static_cast<double>(area)) - 2.0 * center_distance;
+                             2.0 * std::log1p(static_cast<double>(area)) -
+                             2.0 * center_distance + mask_bonus;
         if (score > best_score) {
             best_score = score;
             best_label = label;
@@ -585,6 +662,22 @@ bool RefineBrightDefectGeometryAdaptive(const cv::Mat& gray_yolo,
     return RefineDefectGeometryAdaptive(
         gray_yolo, detail, ContrastPolarity::Bright,
         kMaxBrightRefinedBoxWidth, kMaxBrightRefinedBoxHeight, contrast_mode);
+}
+
+bool RefineDarkDefectGeometryAdaptiveV2(const cv::Mat& gray_yolo,
+                                        DetectionResult& detail,
+                                        ContrastCalculationMode contrast_mode) {
+    return RefineDefectGeometryAdaptive(
+        gray_yolo, detail, ContrastPolarity::Dark,
+        kMaxDarkRefinedBoxWidth, kMaxDarkRefinedBoxHeight, contrast_mode, true);
+}
+
+bool RefineBrightDefectGeometryAdaptiveV2(const cv::Mat& gray_yolo,
+                                          DetectionResult& detail,
+                                          ContrastCalculationMode contrast_mode) {
+    return RefineDefectGeometryAdaptive(
+        gray_yolo, detail, ContrastPolarity::Bright,
+        kMaxBrightRefinedBoxWidth, kMaxBrightRefinedBoxHeight, contrast_mode, true);
 }
 
 bool RefineDarkDefectGeometryMaskGuided(const cv::Mat& gray_yolo,

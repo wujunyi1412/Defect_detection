@@ -16,6 +16,14 @@ bool RefineBrightDefectGeometryAdaptive(
     const cv::Mat& gray_yolo,
     DetectionResult& detail,
     ContrastCalculationMode contrast_mode = ContrastCalculationMode::AdaptiveLocalPlane);
+bool RefineDarkDefectGeometryAdaptiveV2(
+    const cv::Mat& gray_yolo,
+    DetectionResult& detail,
+    ContrastCalculationMode contrast_mode = ContrastCalculationMode::AdaptiveLocalPlane);
+bool RefineBrightDefectGeometryAdaptiveV2(
+    const cv::Mat& gray_yolo,
+    DetectionResult& detail,
+    ContrastCalculationMode contrast_mode = ContrastCalculationMode::AdaptiveLocalPlane);
 bool RefineDarkDefectGeometryMaskGuided(
     const cv::Mat& gray_yolo,
     DetectionResult& detail,

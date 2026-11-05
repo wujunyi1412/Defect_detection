@@ -864,7 +864,7 @@ refinement_method=hybrid_cascade
 
 - `gray_adaptive`：只执行灰度自适应；
 - `mask_guided`：只执行 Mask 引导；
-- `hybrid_cascade`：`mask_guided` 与 `gray_adaptive` 都从原始 YOLO 结果执行。两路边界一致时，按各自质量分数对有符号距离场加权，生成折中边界；两路位置冲突时，根据灰度显著性、原始 Mask 一致性、面积合理性与中心偏移选择更可信的一路；只有一路成功时直接使用该路。
+- `hybrid_cascade`：当前作为 `gray_adaptive V2` 使用。背景平面、MAD 与双阈值区域生长仍由灰度决定；新增局部响应分位数阈值以抑制弱光晕，并在 YOLO Mask 内确实存在足够灰度响应时，才把 Mask 作为候选连通域排序的有限软加分。Mask 不限制搜索范围，也不能让灰度证据不足的区域入选。
 
 ---
 

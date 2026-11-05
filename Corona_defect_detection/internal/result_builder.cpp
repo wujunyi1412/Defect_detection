@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
-#include <utility>
 
 #include "aa_yolo_filter.h"
 #include "dark_defect_refiner.h"
@@ -72,205 +70,6 @@ bool PassTieredContrastAndSize(
         filter.min_width_2, filter.min_height_2, filter.min_area_2);
 }
 
-cv::Rect DetailRect(const DetectionResult& detail, const cv::Size& image_size) {
-    if (image_size.width <= 0 || image_size.height <= 0 ||
-        !std::isfinite(detail.x) || !std::isfinite(detail.y) ||
-        !std::isfinite(detail.w) || !std::isfinite(detail.h) ||
-        detail.w <= 0.0f || detail.h <= 0.0f) {
-        return {};
-    }
-    const int x1 = std::clamp(static_cast<int>(std::floor(detail.x)), 0, image_size.width);
-    const int y1 = std::clamp(static_cast<int>(std::floor(detail.y)), 0, image_size.height);
-    const int x2 = std::clamp(static_cast<int>(std::ceil(detail.x + detail.w)), 0, image_size.width);
-    const int y2 = std::clamp(static_cast<int>(std::ceil(detail.y + detail.h)), 0, image_size.height);
-    return x2 > x1 && y2 > y1 ? cv::Rect(x1, y1, x2 - x1, y2 - y1) : cv::Rect();
-}
-
-cv::Mat DetailMaskInImage(const DetectionResult& detail, const cv::Size& image_size) {
-    const cv::Rect rect = DetailRect(detail, image_size);
-    if (rect.empty() || detail.mask.empty() || detail.mask.channels() != 1) return {};
-
-    cv::Mat local;
-    if (detail.mask.size() == image_size) {
-        local = detail.mask(rect);
-    } else if (detail.mask.size() == rect.size()) {
-        local = detail.mask;
-    } else {
-        cv::resize(detail.mask, local, rect.size(), 0.0, 0.0, cv::INTER_NEAREST);
-    }
-    cv::Mat local_u8;
-    local.convertTo(local_u8, CV_8U);
-    cv::threshold(local_u8, local_u8, 0, 255, cv::THRESH_BINARY);
-
-    cv::Mat result(image_size, CV_8U, cv::Scalar(0));
-    local_u8.copyTo(result(rect));
-    return result;
-}
-
-double RefinementQuality(const DetectionResult& candidate,
-                         const cv::Mat& candidate_mask,
-                         const cv::Mat& original_mask,
-                         const cv::Rect& original_rect,
-                         InspectionConfig::DefectPolarity polarity) {
-    const int candidate_area = cv::countNonZero(candidate_mask);
-    if (candidate_area <= 0) return -std::numeric_limits<double>::infinity();
-
-    double mask_agreement = 0.5;
-    const int original_area = original_mask.empty() ? 0 : cv::countNonZero(original_mask);
-    if (original_area > 0) {
-        cv::Mat overlap;
-        cv::bitwise_and(candidate_mask, original_mask, overlap);
-        const int overlap_area = cv::countNonZero(overlap);
-        mask_agreement = 2.0 * overlap_area / static_cast<double>(candidate_area + original_area);
-    }
-
-    double contrast_strength = 0.0;
-    if (IsContrastRatioValid(candidate.contrast) && candidate.contrast > 0.0f) {
-        const double signed_log = polarity == InspectionConfig::DefectPolarity::Dark
-                                      ? -std::log(candidate.contrast)
-                                      : std::log(candidate.contrast);
-        contrast_strength = 1.0 - std::exp(-6.0 * std::max(0.0, signed_log));
-    }
-
-    double area_plausibility = 0.5;
-    if (original_area > 0) {
-        const double ratio = candidate_area / static_cast<double>(original_area);
-        area_plausibility = std::exp(-0.65 * std::abs(std::log(std::max(1e-6, ratio))));
-    }
-
-    double center_score = 0.5;
-    if (!original_rect.empty()) {
-        const cv::Rect candidate_rect = DetailRect(candidate, candidate_mask.size());
-        const cv::Point2d original_center(original_rect.x + original_rect.width * 0.5,
-                                          original_rect.y + original_rect.height * 0.5);
-        const cv::Point2d candidate_center(candidate_rect.x + candidate_rect.width * 0.5,
-                                           candidate_rect.y + candidate_rect.height * 0.5);
-        const double scale = std::max(1.0, std::hypot(original_rect.width, original_rect.height));
-        center_score = std::exp(-3.0 * cv::norm(candidate_center - original_center) / scale);
-    }
-
-    // Gray evidence is primary. Mask agreement stabilizes ambiguous low-contrast
-    // cases without making the ensemble blindly follow an inaccurate YOLO mask.
-    return 0.55 * contrast_strength + 0.25 * mask_agreement +
-           0.12 * area_plausibility + 0.08 * center_score;
-}
-
-bool FuseRefinementCandidates(const cv::Mat& gray_yolo,
-                              const DetectionResult& original,
-                              const DetectionResult& mask_candidate,
-                              const DetectionResult& adaptive_candidate,
-                              InspectionConfig::DefectPolarity polarity,
-                              ContrastCalculationMode contrast_mode,
-                              DetectionResult& result) {
-    const cv::Mat mask_result = DetailMaskInImage(mask_candidate, gray_yolo.size());
-    const cv::Mat adaptive_result = DetailMaskInImage(adaptive_candidate, gray_yolo.size());
-    if (mask_result.empty() || adaptive_result.empty()) return false;
-
-    cv::Mat intersection;
-    cv::Mat union_mask;
-    cv::bitwise_and(mask_result, adaptive_result, intersection);
-    cv::bitwise_or(mask_result, adaptive_result, union_mask);
-    const int intersection_area = cv::countNonZero(intersection);
-    const int union_area = cv::countNonZero(union_mask);
-    if (intersection_area <= 0 || union_area <= 0) return false;
-
-    // Conflicting localizations must not be averaged into a geometrically invalid
-    // result. They are handled by quality-based selection in the caller.
-    const double iou = intersection_area / static_cast<double>(union_area);
-    if (iou < 0.35) return false;
-
-    const cv::Mat original_mask = DetailMaskInImage(original, gray_yolo.size());
-    const cv::Rect original_rect = DetailRect(original, gray_yolo.size());
-    const double mask_quality = RefinementQuality(
-        mask_candidate, mask_result, original_mask, original_rect, polarity);
-    const double adaptive_quality = RefinementQuality(
-        adaptive_candidate, adaptive_result, original_mask, original_rect, polarity);
-    const double quality_sum = std::max(1e-6, mask_quality + adaptive_quality);
-    // Keep both algorithms influential even when one quality score is dominant.
-    const double mask_weight = std::clamp(mask_quality / quality_sum, 0.25, 0.75);
-
-    std::vector<cv::Point> union_points;
-    cv::findNonZero(union_mask, union_points);
-    cv::Rect roi = cv::boundingRect(union_points);
-    roi.x = std::max(0, roi.x - 2);
-    roi.y = std::max(0, roi.y - 2);
-    roi.width = std::min(gray_yolo.cols - roi.x, roi.width + 4);
-    roi.height = std::min(gray_yolo.rows - roi.y, roi.height + 4);
-
-    auto signed_distance = [&](const cv::Mat& global_mask) -> cv::Mat {
-        cv::Mat local = global_mask(roi);
-        cv::Mat inside_distance;
-        cv::Mat outside_distance;
-        cv::distanceTransform(local, inside_distance, cv::DIST_L2, 3);
-        cv::Mat inverse;
-        cv::bitwise_not(local, inverse);
-        cv::distanceTransform(inverse, outside_distance, cv::DIST_L2, 3);
-        cv::Mat signed_result;
-        cv::subtract(inside_distance, outside_distance, signed_result);
-        return signed_result;
-    };
-
-    const cv::Mat mask_distance = signed_distance(mask_result);
-    const cv::Mat adaptive_distance = signed_distance(adaptive_result);
-    cv::Mat blended;
-    cv::addWeighted(mask_distance, mask_weight,
-                    adaptive_distance, 1.0 - mask_weight, 0.0, blended);
-    cv::Mat fused_local;
-    cv::compare(blended, 0.0, fused_local, cv::CMP_GE);
-
-    // Retain only fused components connected to pixels supported by both methods.
-    cv::Mat labels;
-    const int label_count = cv::connectedComponents(fused_local, labels, 8, CV_32S);
-    cv::Mat trusted_labels(label_count, 1, CV_8U, cv::Scalar(0));
-    const cv::Mat intersection_local = intersection(roi);
-    for (int y = 0; y < labels.rows; ++y) {
-        const int* label_row = labels.ptr<int>(y);
-        const uchar* intersection_row = intersection_local.ptr<uchar>(y);
-        for (int x = 0; x < labels.cols; ++x) {
-            if (intersection_row[x]) trusted_labels.at<uchar>(label_row[x], 0) = 255;
-        }
-    }
-    trusted_labels.at<uchar>(0, 0) = 0;
-    for (int y = 0; y < fused_local.rows; ++y) {
-        uchar* fused_row = fused_local.ptr<uchar>(y);
-        const int* label_row = labels.ptr<int>(y);
-        for (int x = 0; x < fused_local.cols; ++x) {
-            if (!trusted_labels.at<uchar>(label_row[x], 0)) fused_row[x] = 0;
-        }
-    }
-
-    std::vector<cv::Point> fused_points;
-    cv::findNonZero(fused_local, fused_points);
-    if (fused_points.empty()) return false;
-    const cv::Rect local_box = cv::boundingRect(fused_points);
-    const int fused_area = cv::countNonZero(fused_local);
-    const int smaller_area = std::min(cv::countNonZero(mask_result),
-                                      cv::countNonZero(adaptive_result));
-    const int larger_area = std::max(cv::countNonZero(mask_result),
-                                     cv::countNonZero(adaptive_result));
-    if (fused_area < static_cast<int>(std::floor(smaller_area * 0.60)) ||
-        fused_area > static_cast<int>(std::ceil(larger_area * 1.25))) {
-        return false;
-    }
-
-    result = original;
-    result.x = static_cast<float>(roi.x + local_box.x);
-    result.y = static_cast<float>(roi.y + local_box.y);
-    result.w = static_cast<float>(local_box.width);
-    result.h = static_cast<float>(local_box.height);
-    result.area = fused_area;
-    result.mask = fused_local(local_box).clone();
-    const ContrastPolarity contrast_polarity =
-        polarity == InspectionConfig::DefectPolarity::Dark
-            ? ContrastPolarity::Dark
-            : ContrastPolarity::Bright;
-    const float contrast = CalculateContrastRatioByMode(
-        gray_yolo, result.mask, static_cast<int>(result.x), static_cast<int>(result.y),
-        local_box.width, local_box.height, contrast_polarity, contrast_mode);
-    if (IsContrastRatioValid(contrast)) result.contrast = contrast;
-    return true;
-}
-
 bool RefineYoloDetail(const cv::Mat& gray_yolo,
                       DetectionResult& detail,
                       const YoloCategoryDefinition& category,
@@ -305,6 +104,11 @@ bool RefineYoloDetail(const cv::Mat& gray_yolo,
                    ? RefineDarkDefectGeometryAdaptive(gray_yolo, candidate, contrast_mode)
                    : RefineBrightDefectGeometryAdaptive(gray_yolo, candidate, contrast_mode);
     };
+    const auto refine_gray_adaptive_v2 = [&](DetectionResult& candidate) {
+        return polarity == InspectionConfig::DefectPolarity::Dark
+                   ? RefineDarkDefectGeometryAdaptiveV2(gray_yolo, candidate, contrast_mode)
+                   : RefineBrightDefectGeometryAdaptiveV2(gray_yolo, candidate, contrast_mode);
+    };
 
     if (polarity != InspectionConfig::DefectPolarity::Dark &&
         polarity != InspectionConfig::DefectPolarity::Bright) {
@@ -318,43 +122,9 @@ bool RefineYoloDetail(const cv::Mat& gray_yolo,
         return refine_gray_adaptive(detail);
     }
     if (filter.refinement_method == InspectionConfig::DefectRefinementMethod::HybridCascade) {
-        // Run both refiners from the untouched YOLO result. When both succeed,
-        // combine agreeing boundaries and select by evidence when they disagree.
-        const DetectionResult original = detail;
-        DetectionResult mask_candidate = detail;
-        DetectionResult adaptive_candidate = detail;
-        const bool mask_succeeded = refine_mask_guided(mask_candidate);
-        const bool adaptive_succeeded = refine_gray_adaptive(adaptive_candidate);
-        if (mask_succeeded && !adaptive_succeeded) {
-            detail = std::move(mask_candidate);
-            return true;
-        }
-        if (!mask_succeeded && adaptive_succeeded) {
-            detail = std::move(adaptive_candidate);
-            return true;
-        }
-        if (!mask_succeeded) return false;
-
-        DetectionResult fused_candidate;
-        if (FuseRefinementCandidates(gray_yolo, original, mask_candidate,
-                                     adaptive_candidate, polarity, contrast_mode,
-                                     fused_candidate)) {
-            detail = std::move(fused_candidate);
-            return true;
-        }
-
-        const cv::Mat original_mask = DetailMaskInImage(original, gray_yolo.size());
-        const cv::Mat mask_result = DetailMaskInImage(mask_candidate, gray_yolo.size());
-        const cv::Mat adaptive_result = DetailMaskInImage(adaptive_candidate, gray_yolo.size());
-        const cv::Rect original_rect = DetailRect(original, gray_yolo.size());
-        const double mask_quality = RefinementQuality(
-            mask_candidate, mask_result, original_mask, original_rect, polarity);
-        const double adaptive_quality = RefinementQuality(
-            adaptive_candidate, adaptive_result, original_mask, original_rect, polarity);
-        detail = adaptive_quality > mask_quality
-                     ? std::move(adaptive_candidate)
-                     : std::move(mask_candidate);
-        return true;
+        // Gray-adaptive V2 keeps grayscale segmentation authoritative. The YOLO
+        // mask is only a reliability-gated soft prior during component ranking.
+        return refine_gray_adaptive_v2(detail);
     }
     return false;
 }
