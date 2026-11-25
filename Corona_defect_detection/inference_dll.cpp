@@ -57,6 +57,7 @@ public:
     InspectionConfig::CategoryNameMap category_name_mapping_;
     InspectionConfig::AaFilterConfig aa_filter_;
     InspectionConfig::IqtFilterConfig iqt_filter_;
+    InspectionConfig::YoloLargeBoxShrinkConfig yolo_large_box_shrink_;
 
     bool initialized_ = false;
 
@@ -139,6 +140,7 @@ bool InspectionEngine::Initialize(const std::string& config_path) {
     pImpl->category_name_mapping_ = config.category_name_mapping;
     pImpl->aa_filter_ = config.aa_filter;
     pImpl->iqt_filter_ = config.iqt_filter;
+    pImpl->yolo_large_box_shrink_ = config.yolo_large_box_shrink;
 
     if (pImpl->yolo_enabled_) {
         pImpl->yolo_detector.SetNmsMode(
@@ -274,7 +276,7 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
         if (yolo_success) {
             yolo = Internal::AnalyzeYolo(
                 yolo_detections, images.yolo_gray, pImpl->contrast_mode_,
-                &pImpl->category_filters_);
+                &pImpl->category_filters_, &pImpl->yolo_large_box_shrink_);
         }
         timing.yolo_post_ms = postprocess_timer.RestartMilliseconds();
 

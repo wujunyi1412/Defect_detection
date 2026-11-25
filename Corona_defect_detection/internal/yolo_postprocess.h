@@ -21,6 +21,7 @@ YoloDerived AnalyzeYolo(const std::vector<YOLO::Detection>& yolo_detections,
                         const cv::Mat& gray_yolo,
                         ContrastCalculationMode contrast_mode =
                             ContrastCalculationMode::AdaptiveLocalPlane,
-                        const InspectionConfig::CategoryFilterMap* category_filters = nullptr);
+                        const InspectionConfig::CategoryFilterMap* category_filters = nullptr,
+                        const InspectionConfig::YoloLargeBoxShrinkConfig* large_box_shrink = nullptr);
 
 }  // namespace InspectionDLL::Internal

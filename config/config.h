@@ -141,6 +141,13 @@ struct IqtFilterConfig {
     std::vector<std::string> categories = {"Stain"};
 };
 
+struct YoloLargeBoxShrinkConfig {
+    bool enable = true;
+    float min_width = 200.0f;
+    float min_height = 200.0f;
+    float ratio = 0.05f;
+};
+
 struct InspectionConfigData {
     bool yolo_enabled = true;
     bool patchcore_enabled = true;
@@ -152,6 +159,7 @@ struct InspectionConfigData {
     float yolo_mask_threshold = 0.25f;
     float yolo_iou_threshold = 0.2f;
     bool yolo_nms_class_aware = false;
+    YoloLargeBoxShrinkConfig yolo_large_box_shrink;
     int ort_intra_threads = 4;
     float patchcore_score_threshold = 1.4f;
     float patchcore_area_threshold = 1.4f;

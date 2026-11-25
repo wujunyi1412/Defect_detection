@@ -98,6 +98,11 @@ int TestConfigDefaults() {
                    "IQT width filtering should be disabled by default")) return 1;
     if (AssertTrue(cfg.draw_defect_box, "draw_defect_box default should be true")) return 1;
     if (AssertTrue(!cfg.expand_defect_box, "expand_defect_box default should be false")) return 1;
+    if (AssertTrue(cfg.yolo_large_box_shrink.enable &&
+                       cfg.yolo_large_box_shrink.min_width == 200.0f &&
+                       cfg.yolo_large_box_shrink.min_height == 200.0f &&
+                       cfg.yolo_large_box_shrink.ratio == 0.05f,
+                   "YOLO large-box shrink defaults should be enabled at 200x200 and 5 percent")) return 1;
     if (AssertTrue(cfg.draw_box_details, "draw_box_details default should be true")) return 1;
     if (AssertTrue(!cfg.draw_defect_mask, "draw_defect_mask default should be false")) return 1;
     if (AssertTrue(!cfg.concat_original_image, "concat_original_image default should be false")) return 1;
@@ -400,6 +405,33 @@ int TestYoloPostprocessReusesBinaryMask() {
     if (AssertTrue(bright_result.details.size() == 1 &&
                        bright_result.details[0].contrast > 1.0f,
                    "configured defect_polarity should control initial YOLO contrast")) return 1;
+
+    cv::Mat large_gray(420, 420, CV_8U, cv::Scalar(100));
+    YOLO::Detection large_detection{};
+    large_detection.class_id = 2;
+    large_detection.confidence = 0.9f;
+    large_detection.x1 = 50.0f;
+    large_detection.y1 = 60.0f;
+    large_detection.x2 = 350.0f;
+    large_detection.y2 = 360.0f;
+    large_detection.mask = cv::Mat::zeros(large_gray.size(), CV_8U);
+    large_detection.mask(cv::Rect(50, 60, 300, 300)).setTo(255);
+    InspectionConfig::YoloLargeBoxShrinkConfig shrink_config;
+    const InspectionDLL::Internal::YoloDerived shrunk_result =
+        InspectionDLL::Internal::AnalyzeYolo(
+            {large_detection}, large_gray,
+            InspectionDLL::Internal::ContrastCalculationMode::LocalRing,
+            nullptr, &shrink_config);
+    if (AssertTrue(shrunk_result.details.size() == 1,
+                   "large YOLO box should remain after shrinking")) return 1;
+    const auto& shrunk = shrunk_result.details[0];
+    if (AssertTrue(std::abs(shrunk.x - 57.5f) < 0.001f &&
+                       std::abs(shrunk.y - 67.5f) < 0.001f &&
+                       std::abs(shrunk.w - 285.0f) < 0.001f &&
+                       std::abs(shrunk.h - 285.0f) < 0.001f,
+                   "large YOLO box should shrink five percent around its center")) return 1;
+    if (AssertTrue(shrunk.area == 285 * 285,
+                   "mask area should be recomputed inside the shrunk box")) return 1;
     return 0;
 }
 
@@ -645,6 +677,10 @@ int TestAaConfigParsing() {
         stream << "[yolo]\n"
                << "enabled=0\n"
                << "mask_threshold=0.45\n"
+               << "large_box_shrink_enabled=0\n"
+               << "large_box_shrink_min_width=201.5\n"
+               << "large_box_shrink_min_height=202.5\n"
+               << "large_box_shrink_ratio=0.08\n"
                << "[patchcore]\n"
                << "enabled=0\n"
                << "[post]\n"
@@ -731,6 +767,11 @@ int TestAaConfigParsing() {
     if (AssertTrue(loaded, "AA config should load: " + error)) return 1;
     if (AssertTrue(config.yolo_mask_threshold == 0.45f,
                    "YOLO mask threshold should be parsed")) return 1;
+    if (AssertTrue(!config.yolo_large_box_shrink.enable &&
+                       config.yolo_large_box_shrink.min_width == 201.5f &&
+                       config.yolo_large_box_shrink.min_height == 202.5f &&
+                       config.yolo_large_box_shrink.ratio == 0.08f,
+                   "YOLO large-box shrink settings should be parsed")) return 1;
     if (AssertTrue(config.patchcore_yolo_iou_threshold == 0.25f,
                    "PatchCore/YOLO IoU threshold should be parsed")) return 1;
     if (AssertTrue(config.contrast_mode == 2,
