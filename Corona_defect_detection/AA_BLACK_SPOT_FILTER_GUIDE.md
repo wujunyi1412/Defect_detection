@@ -198,6 +198,13 @@ black_spot_debug_log_enabled=1
 
 几何条件或外观条件不通过时，`reason` 会说明原因，例如 `width_out_of_range`、`mask_area_out_of_range`、`center_offset_too_large`、`center_darkness_too_low` 或 `monotonic_ratio_too_low`。不属于 `black_spot_categories` 的类别不会输出该调试日志。
 
+当全局 `[log] level=debug` 时，图片进入推理入口还会单独输出 `[IMAGE_INPUT]` 日志。该日志属于输入流程，不受 AA 或 `black_spot_debug_log_enabled` 控制。路径入口会记录原始图片路径，其他入口只能记录输入来源、尺寸、通道数和数据深度，例如：
+
+```text
+[DEBUG] [IMAGE_INPUT] source=path path="D:\images\sample.png"
+[DEBUG] [IMAGE_INPUT] source=cv::Mat width=992 height=744 channels=1 depth=0
+```
+
 ## 7. 与原有 AA 规则的关系
 
 AA 后过滤包含三条彼此独立的规则：

@@ -3,6 +3,7 @@
 #include <exception>
 #include <future>
 #include <memory>
+#include <sstream>
 
 #include <opencv2/opencv.hpp>
 
@@ -181,6 +182,16 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
         return false;
     }
 
+    if (InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug)) {
+        std::ostringstream message;
+        message << "[IMAGE_INPUT] source=cv::Mat"
+                << " width=" << input_image.cols
+                << " height=" << input_image.rows
+                << " channels=" << input_image.channels()
+                << " depth=" << input_image.depth();
+        InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, message.str());
+    }
+
     if (!pImpl->yolo_enabled_ && !pImpl->patchcore_enabled_) {
         output.result = "OK";
         output.details.clear();
@@ -296,6 +307,11 @@ bool InspectionEngine::ProcessImage(const cv::Mat& input_image, InferenceResult&
 // InspectionEngine 推理函数（图像路径）
 bool InspectionEngine::ProcessImagePath(const std::string& image_path, InferenceResult& output) {
     pImpl->ClearLastError();
+    if (InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug)) {
+        InspectionLogging::LogMessage(
+            InspectionLogging::LogLevel::Debug,
+            "[IMAGE_INPUT] source=path path=\"" + image_path + "\"");
+    }
     cv::Mat img = cv::imread(image_path, cv::IMREAD_UNCHANGED);
     if (img.empty()) {
         pImpl->SetLastError("failed to read image: " + image_path);
@@ -311,6 +327,15 @@ bool InspectionEngine::ProcessFloatArry(const float* image_arry, InferenceResult
     if (image_arry == nullptr || width <= 0 || height <= 0) {
         pImpl->SetLastError("invalid input array or dimensions");
         return false;
+    }
+
+    if (InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug)) {
+        std::ostringstream message;
+        message << "[IMAGE_INPUT] source=float_array"
+                << " width=" << width
+                << " height=" << height
+                << " channels=1 depth=CV_32F";
+        InspectionLogging::LogMessage(InspectionLogging::LogLevel::Debug, message.str());
     }
 
     cv::Mat ori_img(height, width, CV_32FC1, const_cast<float*>(image_arry));
