@@ -10,10 +10,10 @@
 namespace InspectionDLL::Internal {
 namespace {
 
-constexpr int kMaxDarkRefinedBoxWidth = 30;
-constexpr int kMaxDarkRefinedBoxHeight = 30;
-constexpr int kMaxBrightRefinedBoxWidth = 30;
-constexpr int kMaxBrightRefinedBoxHeight = 30;
+constexpr int kMaxDarkRefinedBoxWidth = 50;
+constexpr int kMaxDarkRefinedBoxHeight = 50;
+constexpr int kMaxBrightRefinedBoxWidth = 50;
+constexpr int kMaxBrightRefinedBoxHeight = 50;
 
 // 根据检测框的坐标和宽高，计算出一个 ROI 的矩形框，确保其在图像内
 cv::Rect ClampDetectionRect(const DetectionResult& detail, const cv::Size& image_size) {
