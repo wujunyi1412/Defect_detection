@@ -488,9 +488,20 @@ bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
         global_response = fitted_background - context_f32;
         local_response = smooth_f32 - context_f32;
     }
+    cv::Mat agreement_response;
+    if (use_soft_mask_prior) {
+        // Independent global-plane and local-background support is useful for
+        // ranking, but not used as a hard gate: a real defect may be visible at
+        // only one spatial scale.
+        cv::min(global_response, local_response, agreement_response);
+        cv::max(agreement_response, 0.0, agreement_response);
+    }
     cv::max(global_response, local_response, global_response);
     cv::max(global_response, 0.0, global_response);
     const cv::Mat response = global_response(search);
+    const cv::Mat agreement = use_soft_mask_prior
+                                  ? agreement_response(search)
+                                  : cv::Mat();
 
     double max_response = 0.0;
     cv::minMaxLoc(response, nullptr, &max_response);
@@ -597,6 +608,37 @@ bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
         const cv::Point2d center(centroids.at<double>(label, 0), centroids.at<double>(label, 1));
         const double center_distance = cv::norm(center - detection_center) / center_scale;
         const double seed_fraction = static_cast<double>(seed_overlap) / area;
+        double agreement_bonus = 0.0;
+        double weak_halo_penalty = 0.0;
+        double border_penalty = 0.0;
+        if (use_soft_mask_prior) {
+            const double mean_agreement = cv::mean(
+                agreement(component), component_mask)[0];
+            const double agreement_fraction = std::clamp(
+                mean_agreement / std::max(1e-6, mean_response), 0.0, 1.0);
+            agreement_bonus = 4.0 * agreement_fraction;
+
+            cv::Mat weak_pixels;
+            cv::compare(response(component), grow_threshold * 1.25,
+                        weak_pixels, cv::CMP_LT);
+            const int weak_area = cv::countNonZero(weak_pixels & component_mask);
+            weak_halo_penalty = 3.0 * weak_area / static_cast<double>(area);
+
+            int border_area = 0;
+            if (component.x == 0) {
+                border_area += cv::countNonZero(component_mask.col(0));
+            }
+            if (component.x + component.width == search.width && component.width > 1) {
+                border_area += cv::countNonZero(component_mask.col(component.width - 1));
+            }
+            if (component.y == 0) {
+                border_area += cv::countNonZero(component_mask.row(0));
+            }
+            if (component.y + component.height == search.height && component.height > 1) {
+                border_area += cv::countNonZero(component_mask.row(component.height - 1));
+            }
+            border_penalty = 4.0 * std::min(1.0, border_area / static_cast<double>(area));
+        }
         double mask_bonus = 0.0;
         if (mask_prior_reliability > 0.0) {
             const int mask_overlap = cv::countNonZero(
@@ -616,7 +658,8 @@ bool RefineDefectGeometryAdaptive(const cv::Mat& gray_yolo,
         }
         const double score = mean_response + 8.0 * seed_fraction + 3.0 * fill +
                              2.0 * std::log1p(static_cast<double>(area)) -
-                             2.0 * center_distance + mask_bonus;
+                             2.0 * center_distance + agreement_bonus + mask_bonus -
+                             weak_halo_penalty - border_penalty;
         if (score > best_score) {
             best_score = score;
             best_label = label;

@@ -116,6 +116,19 @@ struct AaFilterConfig {
     float position_height_min = 175.0f;
     float position_height_max = 245.0f;
     std::vector<std::string> position_categories = {"Stain"};
+
+    bool black_spot_filter_enable = false;
+    float black_spot_width_min = 145.0f;
+    float black_spot_width_max = 240.0f;
+    float black_spot_height_min = 145.0f;
+    float black_spot_height_max = 260.0f;
+    int black_spot_mask_area_min = 3000;
+    int black_spot_mask_area_max = 50000;
+    float black_spot_min_center_darkness = 12.0f;
+    float black_spot_min_monotonic_ratio = 0.71f;
+    float black_spot_monotonic_tolerance = 2.0f;
+    float black_spot_max_center_offset_ratio = 0.45f;
+    std::vector<std::string> black_spot_categories = {"Stain"};
 };
 
 struct IqtFilterConfig {

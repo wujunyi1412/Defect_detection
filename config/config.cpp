@@ -102,6 +102,33 @@ AaFilterConfig LoadAaFilter(const IniData& ini) {
     if (TryGetString(ini, "AA", "position_categories", position_categories)) {
         filter.position_categories = ParseFilterCategories(position_categories);
     }
+
+    filter.black_spot_filter_enable = GetBoolOr(
+        ini, "AA", "black_spot_filter_enabled", filter.black_spot_filter_enable);
+    filter.black_spot_width_min = GetFloatOr(
+        ini, "AA", "black_spot_width_min", filter.black_spot_width_min);
+    filter.black_spot_width_max = GetFloatOr(
+        ini, "AA", "black_spot_width_max", filter.black_spot_width_max);
+    filter.black_spot_height_min = GetFloatOr(
+        ini, "AA", "black_spot_height_min", filter.black_spot_height_min);
+    filter.black_spot_height_max = GetFloatOr(
+        ini, "AA", "black_spot_height_max", filter.black_spot_height_max);
+    filter.black_spot_mask_area_min = GetIntOr(
+        ini, "AA", "black_spot_mask_area_min", filter.black_spot_mask_area_min);
+    filter.black_spot_mask_area_max = GetIntOr(
+        ini, "AA", "black_spot_mask_area_max", filter.black_spot_mask_area_max);
+    filter.black_spot_min_center_darkness = GetFloatOr(
+        ini, "AA", "black_spot_min_center_darkness", filter.black_spot_min_center_darkness);
+    filter.black_spot_min_monotonic_ratio = GetFloatOr(
+        ini, "AA", "black_spot_min_monotonic_ratio", filter.black_spot_min_monotonic_ratio);
+    filter.black_spot_monotonic_tolerance = GetFloatOr(
+        ini, "AA", "black_spot_monotonic_tolerance", filter.black_spot_monotonic_tolerance);
+    filter.black_spot_max_center_offset_ratio = GetFloatOr(
+        ini, "AA", "black_spot_max_center_offset_ratio", filter.black_spot_max_center_offset_ratio);
+    std::string black_spot_categories;
+    if (TryGetString(ini, "AA", "black_spot_categories", black_spot_categories)) {
+        filter.black_spot_categories = ParseFilterCategories(black_spot_categories);
+    }
     return filter;
 }
 
@@ -395,6 +422,44 @@ bool ValidateConfig(const InspectionConfigData& out, std::string& err) {
         for (const auto& category : out.aa_filter.position_categories) {
             if (CanonicalYoloCategory(category).empty()) {
                 err = "AA.position_categories contains unsupported category: " + category;
+                return false;
+            }
+        }
+    }
+    if (out.aa_filter.black_spot_filter_enable) {
+        const auto& filter = out.aa_filter;
+        if (filter.black_spot_width_max < filter.black_spot_width_min) {
+            err = "AA.black_spot_width_max must be >= AA.black_spot_width_min";
+            return false;
+        }
+        if (filter.black_spot_height_max < filter.black_spot_height_min) {
+            err = "AA.black_spot_height_max must be >= AA.black_spot_height_min";
+            return false;
+        }
+        if (filter.black_spot_mask_area_min < 0 ||
+            filter.black_spot_mask_area_max < filter.black_spot_mask_area_min) {
+            err = "AA black-spot mask-area range is invalid";
+            return false;
+        }
+        if (filter.black_spot_min_center_darkness < 0.0f ||
+            filter.black_spot_monotonic_tolerance < 0.0f) {
+            err = "AA black-spot darkness and tolerance values must be >= 0";
+            return false;
+        }
+        if (filter.black_spot_min_monotonic_ratio < 0.0f ||
+            filter.black_spot_min_monotonic_ratio > 1.0f ||
+            filter.black_spot_max_center_offset_ratio < 0.0f ||
+            filter.black_spot_max_center_offset_ratio > 1.0f) {
+            err = "AA black-spot ratio values must be within [0, 1]";
+            return false;
+        }
+        if (filter.black_spot_categories.empty()) {
+            err = "AA.black_spot_categories must not be empty when the black-spot filter is enabled";
+            return false;
+        }
+        for (const auto& category : filter.black_spot_categories) {
+            if (CanonicalYoloCategory(category).empty()) {
+                err = "AA.black_spot_categories contains unsupported category: " + category;
                 return false;
             }
         }

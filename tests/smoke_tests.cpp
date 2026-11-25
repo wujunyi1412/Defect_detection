@@ -201,6 +201,52 @@ int TestMaskGuidedDefectRefinement() {
     return 0;
 }
 
+int TestGrayAdaptiveV2UsesMaskAsSoftPrior() {
+    cv::Mat gray(80, 80, CV_8U, cv::Scalar(100));
+    const cv::Rect expected_defect(28, 29, 7, 5);
+    gray(expected_defect).setTo(180);
+    gray(cv::Rect(39, 39, 3, 3)).setTo(184);
+
+    InspectionDLL::DetectionResult supported;
+    supported.name = "Bright_clusters";
+    supported.x = 25.0f;
+    supported.y = 25.0f;
+    supported.w = 18.0f;
+    supported.h = 18.0f;
+    supported.area = 35;
+    supported.score = 0.9f;
+    supported.mask = cv::Mat::zeros(gray.size(), CV_8U);
+    supported.mask(expected_defect).setTo(255);
+
+    const bool supported_refined =
+        InspectionDLL::Internal::RefineBrightDefectGeometryAdaptiveV2(gray, supported);
+    if (AssertTrue(supported_refined,
+                   "gray-adaptive V2 should refine a mask-supported gray candidate")) return 1;
+    if (AssertTrue(supported.x < 35.0f && supported.y < 35.0f &&
+                       supported.w >= 6.0f && supported.h >= 4.0f,
+                   "a reliable soft mask prior should break a close grayscale tie")) return 1;
+
+    cv::Mat stronger_gray(80, 80, CV_8U, cv::Scalar(100));
+    stronger_gray(expected_defect).setTo(220);
+    stronger_gray(cv::Rect(39, 39, 3, 3)).setTo(180);
+    InspectionDLL::DetectionResult misleading = supported;
+    misleading.x = 25.0f;
+    misleading.y = 25.0f;
+    misleading.w = 18.0f;
+    misleading.h = 18.0f;
+    misleading.mask.setTo(0);
+    misleading.mask(cv::Rect(39, 39, 3, 3)).setTo(255);
+
+    const bool misleading_refined =
+        InspectionDLL::Internal::RefineBrightDefectGeometryAdaptiveV2(stronger_gray, misleading);
+    if (AssertTrue(misleading_refined,
+                   "gray-adaptive V2 should survive an inaccurate YOLO mask")) return 1;
+    if (AssertTrue(misleading.x < 35.0f && misleading.y < 35.0f &&
+                       misleading.w >= 6.0f && misleading.h >= 4.0f,
+                   "a weak mask-supported distractor must not override stronger gray evidence")) return 1;
+    return 0;
+}
+
 int TestHybridCascadeFallsBackToGrayAdaptive() {
     cv::Mat gray(80, 80, CV_8U, cv::Scalar(100));
     gray(cv::Rect(28, 29, 7, 5)).setTo(220);
@@ -560,6 +606,34 @@ int TestAaYoloFilterRules() {
                    "a detail outside the left-coordinate range should be preserved")) return 1;
     if (AssertTrue(position_details[1].name == "BrightStripes",
                    "AA position filter should preserve categories outside its list")) return 1;
+
+    cv::Mat black_spot_image(220, 420, CV_8U, cv::Scalar(180));
+    for (int y = 20; y < 200; ++y) {
+        uchar* row = black_spot_image.ptr<uchar>(y);
+        for (int x = 20; x < 200; ++x) {
+            const float dx = static_cast<float>(x - 110) / 42.0f;
+            const float dy = static_cast<float>(y - 110) / 55.0f;
+            row[x] = static_cast<uchar>(180.0f - 85.0f * std::exp(-0.5f * (dx * dx + dy * dy)));
+        }
+    }
+    std::vector<InspectionDLL::DetectionResult> black_spot_details = {
+        MakeDetail("Stain", 20.0f, 20.0f, 180.0f, 180.0f),
+        MakeDetail("Stain", 220.0f, 20.0f, 180.0f, 180.0f),
+        MakeDetail("Stain", 20.0f, 20.0f, 100.0f, 100.0f)
+    };
+    black_spot_details[0].area = 12000;
+    black_spot_details[1].area = 12000;
+    black_spot_details[2].area = 12000;
+    config = {};
+    config.black_spot_filter_enable = true;
+    InspectionDLL::Internal::ApplyAaYoloFilter(
+        black_spot_details, config, nullptr, black_spot_image);
+    if (AssertTrue(black_spot_details.size() == 2,
+                   "AA black-spot filter should remove only a size-qualified radial dark spot")) return 1;
+    if (AssertTrue(black_spot_details[0].x == 220.0f,
+                   "AA black-spot filter should preserve a flat size-qualified region")) return 1;
+    if (AssertTrue(black_spot_details[1].w == 100.0f,
+                   "AA black-spot filter should skip appearance work outside the geometry range")) return 1;
     return 0;
 }
 
@@ -594,6 +668,18 @@ int TestAaConfigParsing() {
                << "position_height_min=70.5\n"
                << "position_height_max=80.5\n"
                << "position_categories= stain, BrightStripes\n"
+               << "black_spot_filter_enabled=1\n"
+               << "black_spot_width_min=100.5\n"
+               << "black_spot_width_max=210.5\n"
+               << "black_spot_height_min=110.5\n"
+               << "black_spot_height_max=220.5\n"
+               << "black_spot_mask_area_min=1234\n"
+               << "black_spot_mask_area_max=23456\n"
+               << "black_spot_min_center_darkness=13.5\n"
+               << "black_spot_min_monotonic_ratio=0.75\n"
+               << "black_spot_monotonic_tolerance=2.5\n"
+               << "black_spot_max_center_offset_ratio=0.35\n"
+               << "black_spot_categories= stain\n"
                << "[IQT]\n"
                << "enabled=1\n"
                << "center_y_min=300.5\n"
@@ -678,6 +764,24 @@ int TestAaConfigParsing() {
                    config.aa_filter.position_categories[0] == "stain" &&
                    config.aa_filter.position_categories[1] == "BrightStripes",
                    "AA position category list should be trimmed and parsed")) return 1;
+    if (AssertTrue(config.aa_filter.black_spot_filter_enable,
+                   "AA black-spot filter enabled flag should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.black_spot_width_min == 100.5f &&
+                   config.aa_filter.black_spot_width_max == 210.5f &&
+                   config.aa_filter.black_spot_height_min == 110.5f &&
+                   config.aa_filter.black_spot_height_max == 220.5f,
+                   "AA black-spot size ranges should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.black_spot_mask_area_min == 1234 &&
+                   config.aa_filter.black_spot_mask_area_max == 23456,
+                   "AA black-spot mask-area range should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.black_spot_min_center_darkness == 13.5f &&
+                   config.aa_filter.black_spot_min_monotonic_ratio == 0.75f &&
+                   config.aa_filter.black_spot_monotonic_tolerance == 2.5f &&
+                   config.aa_filter.black_spot_max_center_offset_ratio == 0.35f,
+                   "AA black-spot appearance thresholds should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.black_spot_categories.size() == 1 &&
+                   config.aa_filter.black_spot_categories[0] == "stain",
+                   "AA black-spot category list should be parsed")) return 1;
     if (AssertTrue(config.iqt_filter.enable, "IQT config enabled flag should be parsed")) return 1;
     if (AssertTrue(config.iqt_filter.center_y_min == 300.5f &&
                    config.iqt_filter.center_y_max == 400.5f,
@@ -1134,6 +1238,7 @@ int main() {
     if (TestConfigDefaults()) return 1;
     if (TestBrightDefectRefinement()) return 1;
     if (TestMaskGuidedDefectRefinement()) return 1;
+    if (TestGrayAdaptiveV2UsesMaskAsSoftPrior()) return 1;
     if (TestHybridCascadeFallsBackToGrayAdaptive()) return 1;
     if (TestAaYoloFilterRules()) return 1;
     if (TestIqtYoloFilterRules()) return 1;

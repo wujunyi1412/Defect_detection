@@ -102,7 +102,7 @@ YOLO 检测结果
   ├─ none          → 不细化
   ├─ gray_adaptive → 根据 defect_polarity 做当前框内灰度自适应细化
   ├─ mask_guided   → 根据 defect_polarity 做 YOLO Mask 引导细化
-  └─ hybrid_cascade → gray_adaptive V2：相对响应阈值抑制光晕，可靠 Mask 仅辅助候选排序
+  └─ hybrid_cascade → gray_adaptive V2：相对阈值 + 双尺度一致性 + 光晕/边缘惩罚，失败时回退原版
   ↓
 细化成功：更新框、面积、Mask 和对比度
 细化失败：完整保留原始 YOLO 结果

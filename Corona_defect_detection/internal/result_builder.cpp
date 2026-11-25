@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "aa_yolo_filter.h"
 #include "dark_defect_refiner.h"
@@ -124,7 +125,14 @@ bool RefineYoloDetail(const cv::Mat& gray_yolo,
     if (filter.refinement_method == InspectionConfig::DefectRefinementMethod::HybridCascade) {
         // Gray-adaptive V2 keeps grayscale segmentation authoritative. The YOLO
         // mask is only a reliability-gated soft prior during component ranking.
-        return refine_gray_adaptive_v2(detail);
+        DetectionResult enhanced_candidate = detail;
+        if (refine_gray_adaptive_v2(enhanced_candidate)) {
+            detail = std::move(enhanced_candidate);
+            return true;
+        }
+        // The enhanced path uses stricter evidence. Preserve baseline recall if
+        // those additional checks reject an otherwise valid grayscale defect.
+        return refine_gray_adaptive(detail);
     }
     return false;
 }
@@ -377,7 +385,8 @@ void ComposeOutputWithDefectFilter(const PatchCoreDerived& pc,
     ApplyAaYoloFilter(
         yolo_details_filtered,
         context.aa_filter,
-        context.draw_filtered_defects ? &removed_by_aa : nullptr);
+        context.draw_filtered_defects ? &removed_by_aa : nullptr,
+        gray_yolo);
     ApplyIqtYoloFilter(
         yolo_details_filtered,
         context.iqt_filter,
