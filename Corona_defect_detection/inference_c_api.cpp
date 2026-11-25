@@ -1,6 +1,7 @@
 #include "inference_c_api.h"
 #include "inference_dll.h"
 #include "internal/overlay_renderer.h"
+#include "logger.h"
 #include "performance_timer.h"
 
 #ifdef _WIN32
@@ -32,6 +33,15 @@
 
 // 内部辅助函数
 namespace {
+
+void LogImagePathInput(const char* image_path, const char* api_name) {
+    if (!image_path ||
+        !InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Debug)) return;
+    InspectionLogging::LogMessage(
+        InspectionLogging::LogLevel::Debug,
+        std::string("[IMAGE_INPUT] source=path api=") + api_name +
+            " path=\"" + image_path + "\"");
+}
 
 // 对比字符串是否相等，不区分大小写
 bool EqualsIgnoreCase(const char* a, const char* b) {
@@ -234,6 +244,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathTimed(
     if (!eng || !image_path || !out_result)  return INSPECTION_STATUS_INVALID_ARGUMENT;
 
     try {
+        LogImagePathInput(image_path, "Inspection_ProcessImagePathTimed");
         // File I/O is deliberately excluded from inference time.
         cv::Mat input_image = cv::imread(image_path, cv::IMREAD_UNCHANGED);
         if (input_image.empty()) {
@@ -277,6 +288,7 @@ INSPECTION_C_EXPORT int32_t INSPECTION_CALL Inspection_ProcessImagePathToOverlay
     }
 
     try {
+        LogImagePathInput(image_path, "Inspection_ProcessImagePathToOverlayFile");
         cv::Mat input_image = cv::imread(image_path, cv::IMREAD_UNCHANGED);
         if (input_image.empty()) {
             CopyExceptionMessage("failed to read input image.", o_message);
