@@ -105,6 +105,8 @@ AaFilterConfig LoadAaFilter(const IniData& ini) {
 
     filter.black_spot_filter_enable = GetBoolOr(
         ini, "AA", "black_spot_filter_enabled", filter.black_spot_filter_enable);
+    filter.black_spot_debug_log_enable = GetBoolOr(
+        ini, "AA", "black_spot_debug_log_enabled", filter.black_spot_debug_log_enable);
     filter.black_spot_width_min = GetFloatOr(
         ini, "AA", "black_spot_width_min", filter.black_spot_width_min);
     filter.black_spot_width_max = GetFloatOr(

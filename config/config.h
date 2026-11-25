@@ -118,6 +118,7 @@ struct AaFilterConfig {
     std::vector<std::string> position_categories = {"Stain"};
 
     bool black_spot_filter_enable = false;
+    bool black_spot_debug_log_enable = false;
     float black_spot_width_min = 145.0f;
     float black_spot_width_max = 240.0f;
     float black_spot_height_min = 145.0f;

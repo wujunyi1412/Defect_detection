@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <string>
+
+#include "logger.h"
 
 namespace InspectionDLL::Internal {
 namespace {
@@ -21,6 +25,20 @@ bool ContainsCategory(const std::vector<std::string>& categories,
                        [&](const std::string& category) {
                            return ToLowerCopy(category) == lowered_name;
                        });
+}
+
+void LogBlackSpot(const DetectionResult& detail,
+                  const InspectionConfig::AaFilterConfig& config,
+                  const std::string& message) {
+    if (!config.black_spot_debug_log_enable ||
+        !InspectionLogging::IsLogEnabled(InspectionLogging::LogLevel::Info)) return;
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(3)
+           << "[AA_BLACK_SPOT] name=" << detail.name
+           << " x=" << detail.x << " y=" << detail.y
+           << " w=" << detail.w << " h=" << detail.h
+           << " mask_area=" << detail.area << ' ' << message;
+    InspectionLogging::LogMessage(InspectionLogging::LogLevel::Info, stream.str());
 }
 
 bool ShouldFilterByBandRule(const DetectionResult& detail,
@@ -54,26 +72,52 @@ bool MatchesBlackSpotGeometry(const DetectionResult& detail,
     if (!ContainsCategory(config.black_spot_categories, detail.name)) return false;
     if (!std::isfinite(detail.x) || !std::isfinite(detail.y) ||
         !std::isfinite(detail.w) || !std::isfinite(detail.h) ||
-        detail.area < 0) return false;
-
-    return detail.w >= config.black_spot_width_min &&
-           detail.w <= config.black_spot_width_max &&
-           detail.h >= config.black_spot_height_min &&
-           detail.h <= config.black_spot_height_max &&
-           detail.area >= config.black_spot_mask_area_min &&
-           detail.area <= config.black_spot_mask_area_max;
+        detail.area < 0) {
+        LogBlackSpot(detail, config, "geometry_pass=0 reason=invalid_geometry");
+        return false;
+    }
+    if (detail.w < config.black_spot_width_min || detail.w > config.black_spot_width_max) {
+        std::ostringstream message;
+        message << "geometry_pass=0 reason=width_out_of_range configured_range=["
+                << config.black_spot_width_min << ',' << config.black_spot_width_max << ']';
+        LogBlackSpot(detail, config, message.str());
+        return false;
+    }
+    if (detail.h < config.black_spot_height_min || detail.h > config.black_spot_height_max) {
+        std::ostringstream message;
+        message << "geometry_pass=0 reason=height_out_of_range configured_range=["
+                << config.black_spot_height_min << ',' << config.black_spot_height_max << ']';
+        LogBlackSpot(detail, config, message.str());
+        return false;
+    }
+    if (detail.area < config.black_spot_mask_area_min ||
+        detail.area > config.black_spot_mask_area_max) {
+        std::ostringstream message;
+        message << "geometry_pass=0 reason=mask_area_out_of_range configured_range=["
+                << config.black_spot_mask_area_min << ',' << config.black_spot_mask_area_max << ']';
+        LogBlackSpot(detail, config, message.str());
+        return false;
+    }
+    LogBlackSpot(detail, config, "geometry_pass=1");
+    return true;
 }
 
 bool HasBlackSpotAppearance(const DetectionResult& detail,
                             const cv::Mat& gray_yolo,
                             const InspectionConfig::AaFilterConfig& config) {
-    if (gray_yolo.empty() || gray_yolo.channels() != 1) return false;
+    if (gray_yolo.empty() || gray_yolo.channels() != 1) {
+        LogBlackSpot(detail, config, "appearance_pass=0 filtered=0 reason=invalid_gray_image");
+        return false;
+    }
 
     const int x0 = std::clamp(static_cast<int>(std::floor(detail.x)), 0, gray_yolo.cols);
     const int y0 = std::clamp(static_cast<int>(std::floor(detail.y)), 0, gray_yolo.rows);
     const int x1 = std::clamp(static_cast<int>(std::ceil(detail.x + detail.w)), 0, gray_yolo.cols);
     const int y1 = std::clamp(static_cast<int>(std::ceil(detail.y + detail.h)), 0, gray_yolo.rows);
-    if (x1 - x0 < 12 || y1 - y0 < 12) return false;
+    if (x1 - x0 < 12 || y1 - y0 < 12) {
+        LogBlackSpot(detail, config, "appearance_pass=0 filtered=0 reason=invalid_roi");
+        return false;
+    }
 
     cv::Mat roi32;
     gray_yolo(cv::Rect(x0, y0, x1 - x0, y1 - y0)).convertTo(roi32, CV_32F);
@@ -91,8 +135,16 @@ bool HasBlackSpotAppearance(const DetectionResult& detail,
     const float half_h = std::max(1.0f, 0.5f * static_cast<float>(smooth.rows));
     const float center_dx = (static_cast<float>(dark_center.x) + 0.5f - half_w) / half_w;
     const float center_dy = (static_cast<float>(dark_center.y) + 0.5f - half_h) / half_h;
-    if (std::sqrt(center_dx * center_dx + center_dy * center_dy) >
-        config.black_spot_max_center_offset_ratio) return false;
+    const float center_offset = std::sqrt(center_dx * center_dx + center_dy * center_dy);
+    if (center_offset > config.black_spot_max_center_offset_ratio) {
+        std::ostringstream message;
+        message << "appearance_pass=0 filtered=0 reason=center_offset_too_large"
+                << " dark_center=(" << dark_center.x << ',' << dark_center.y << ')'
+                << " center_offset_ratio=" << center_offset
+                << " threshold=" << config.black_spot_max_center_offset_ratio;
+        LogBlackSpot(detail, config, message.str());
+        return false;
+    }
 
     constexpr int kRingCount = 8;
     float sums[kRingCount] = {};
@@ -114,12 +166,15 @@ bool HasBlackSpotAppearance(const DetectionResult& detail,
 
     float means[kRingCount] = {};
     for (int i = 0; i < kRingCount; ++i) {
-        if (counts[i] == 0) return false;
+        if (counts[i] == 0) {
+            LogBlackSpot(detail, config, "appearance_pass=0 filtered=0 reason=empty_radial_ring");
+            return false;
+        }
         means[i] = sums[i] / static_cast<float>(counts[i]);
     }
     const float center_mean = 0.5f * (means[0] + means[1]);
     const float outer_mean = 0.5f * (means[6] + means[7]);
-    if (outer_mean - center_mean < config.black_spot_min_center_darkness) return false;
+    const float center_darkness = outer_mean - center_mean;
 
     int rising_steps = 0;
     for (int i = 0; i + 1 < kRingCount; ++i) {
@@ -129,7 +184,31 @@ bool HasBlackSpotAppearance(const DetectionResult& detail,
     }
     const float monotonic_ratio = static_cast<float>(rising_steps) /
                                   static_cast<float>(kRingCount - 1);
-    return monotonic_ratio >= config.black_spot_min_monotonic_ratio;
+    const bool darkness_pass = center_darkness >= config.black_spot_min_center_darkness;
+    const bool monotonic_pass = monotonic_ratio >= config.black_spot_min_monotonic_ratio;
+    const bool appearance_pass = darkness_pass && monotonic_pass;
+    const char* reason = !darkness_pass ? "center_darkness_too_low" :
+                         (!monotonic_pass ? "monotonic_ratio_too_low" : "passed");
+    std::ostringstream message;
+    message << "appearance_pass=" << (appearance_pass ? 1 : 0)
+            << " filtered=" << (appearance_pass ? 1 : 0)
+            << " reason=" << reason
+            << " dark_center=(" << dark_center.x << ',' << dark_center.y << ')'
+            << " center_offset_ratio=" << center_offset
+            << " ring_means=[";
+    for (int i = 0; i < kRingCount; ++i) {
+        if (i > 0) message << ',';
+        message << means[i];
+    }
+    message << "] center_mean=" << center_mean
+            << " outer_mean=" << outer_mean
+            << " center_darkness=" << center_darkness
+            << " darkness_threshold=" << config.black_spot_min_center_darkness
+            << " rising_steps=" << rising_steps << '/' << (kRingCount - 1)
+            << " monotonic_ratio=" << monotonic_ratio
+            << " monotonic_threshold=" << config.black_spot_min_monotonic_ratio;
+    LogBlackSpot(detail, config, message.str());
+    return appearance_pass;
 }
 
 bool ShouldFilterByBlackSpotRule(const DetectionResult& detail,

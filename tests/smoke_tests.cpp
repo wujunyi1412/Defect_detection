@@ -669,6 +669,7 @@ int TestAaConfigParsing() {
                << "position_height_max=80.5\n"
                << "position_categories= stain, BrightStripes\n"
                << "black_spot_filter_enabled=1\n"
+               << "black_spot_debug_log_enabled=1\n"
                << "black_spot_width_min=100.5\n"
                << "black_spot_width_max=210.5\n"
                << "black_spot_height_min=110.5\n"
@@ -766,6 +767,8 @@ int TestAaConfigParsing() {
                    "AA position category list should be trimmed and parsed")) return 1;
     if (AssertTrue(config.aa_filter.black_spot_filter_enable,
                    "AA black-spot filter enabled flag should be parsed")) return 1;
+    if (AssertTrue(config.aa_filter.black_spot_debug_log_enable,
+                   "AA black-spot debug-log flag should be parsed")) return 1;
     if (AssertTrue(config.aa_filter.black_spot_width_min == 100.5f &&
                    config.aa_filter.black_spot_width_max == 210.5f &&
                    config.aa_filter.black_spot_height_min == 110.5f &&
