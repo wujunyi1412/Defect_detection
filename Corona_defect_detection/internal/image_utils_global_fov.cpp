@@ -162,7 +162,7 @@ float CalculateContrastRatioGlobalFov(const cv::Mat& gray_img,
         }
     }
     const float defect = TailMean(std::move(defect_values), polarity, background);
-    const float ratio = defect / background;
+    const float ratio = std::abs(1.0f - defect / background);
     return IsContrastRatioValid(ratio) ? ratio : InvalidContrastRatio();
 }
 

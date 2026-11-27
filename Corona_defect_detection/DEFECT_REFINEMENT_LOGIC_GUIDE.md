@@ -417,7 +417,7 @@ CalculateContrastRatioByMode(...)
 |---:|---|---|
 | 0 | `LocalRing` | 使用缺陷 Mask 周围的局部环形背景 |
 | 1 | `AdaptiveLocalPlane` | 使用自适应局部背景平面，当前默认 |
-| 2 | `GlobalFovMedian` | 使用排除黑边后的全 FOV 中位数背景 |
+| 2 | `GlobalFovMedian` | 使用排除黑边后的全 FOV 中位数背景，输出 `|1 - 缺陷灰度 / 背景灰度|` |
 
 当前配置：
 

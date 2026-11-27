@@ -947,15 +947,15 @@ int TestGlobalFovContrastExcludesBlackFrame() {
         InspectionDLL::Internal::ContrastPolarity::Dark,
         InspectionDLL::Internal::ContrastCalculationMode::GlobalFovMedian);
     if (AssertTrue(std::abs(dark_ratio - 0.5f) < 1e-5f,
-                   "global FOV mode should divide dark-tail mean by the non-frame median")) return 1;
+                   "global FOV mode should return the absolute dark deviation from background")) return 1;
 
     gray(defect_rect).setTo(150);
     const float bright_ratio = InspectionDLL::Internal::CalculateContrastRatioByMode(
         gray, mask, defect_rect.x, defect_rect.y, defect_rect.width, defect_rect.height,
         InspectionDLL::Internal::ContrastPolarity::Bright,
         InspectionDLL::Internal::ContrastCalculationMode::GlobalFovMedian);
-    if (AssertTrue(std::abs(bright_ratio - 1.5f) < 1e-5f,
-                   "global FOV mode should divide bright-tail mean by the non-frame median")) return 1;
+    if (AssertTrue(std::abs(bright_ratio - 0.5f) < 1e-5f,
+                   "global FOV mode should return the absolute bright deviation from background")) return 1;
     return 0;
 }
 
